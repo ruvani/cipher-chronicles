@@ -115,6 +115,9 @@ function shell() {
 }
 
 function pageMarkup(p, number) {
+  if (p && p.page_type === 'blank') {
+    return '<div class="page-inner blank-page" aria-label="Blank page"></div>';
+  }
   if (!p) {
     return `<div class="page-inner endpaper">
       <span class="eyebrow">THE JOURNEY CONTINUES</span>
@@ -170,12 +173,14 @@ function draw() {
   document.querySelector('#next').disabled = index >= count - 1;
 
   const btns = pages
-    .filter((_, i) => i % 2 === 0)
-    .map((p, i) =>
-      `<button data-spread="${i}">${escapeHTML(
-        (p.chapter || `Chapter ${i + 1}`).split('·')[0].trim()
-      )}</button>`
-    )
+    .map((p, i) => ({ p, i }))
+    .filter(({ p }) => p.page_type !== 'blank' && p.title)
+    .map(({ p, i }) => {
+      const spread = Math.floor(i / 2);
+      return `<button data-spread="${spread}">${escapeHTML(
+        p.chapter || p.title || `Page ${i + 1}`
+      )}</button>`;
+    })
     .join('');
 
   document.querySelector('#chapterButtons').innerHTML = btns;
@@ -257,7 +262,7 @@ async function loadPublicPages() {
 
   const { data, error } = await supabase
     .from('notebook_pages')
-    .select('id,chapter,title,lead,body_html,sort_order')
+    .select('id,page_type,chapter,title,lead,body_html,sort_order')
     .eq('status', 'published')
     .order('sort_order');
 
@@ -386,8 +391,8 @@ async function showDashboard() {
       <article class="admin-row">
         <div>
           <span class="status-tag ${p.status}">${p.status}</span>
-          <h3>${escapeHTML(p.title)}</h3>
-          <small>${escapeHTML(p.chapter)}</small>
+          <h3>${p.page_type === 'blank' ? 'Blank page' : escapeHTML(p.title || 'Untitled page')}</h3>
+          <small>${p.page_type === 'blank' ? 'No chapter content' : escapeHTML(p.chapter || '')}</small>
         </div>
         <button data-edit="${p.id}" class="quiet">Edit</button>
       </article>
@@ -413,42 +418,46 @@ async function showDashboard() {
 
 function editorForm(p = {}) {
   const target = document.querySelector('#editor');
+  const pageType = p.page_type || 'content';
 
   target.innerHTML = `<div class="editor-card">
     <h3>${p.id ? 'Edit page' : 'Create a page'}</h3>
 
     <form id="pageForm">
-      <label>Chapter / section
-        <input name="chapter" required value="${escapeHTML(p.chapter || 'NEW CHAPTER')}">
+      <label>Page type
+        <select name="page_type" id="pageType">
+          <option value="content" ${pageType === 'content' ? 'selected' : ''}>Content page</option>
+          <option value="blank" ${pageType === 'blank' ? 'selected' : ''}>Blank page</option>
+        </select>
       </label>
 
-      <label>Page title
-        <input name="title" required value="${escapeHTML(p.title || '')}">
-      </label>
+      <div id="contentFields" ${pageType === 'blank' ? 'hidden' : ''}>
+        <label>Chapter / section
+          <input name="chapter" value="${escapeHTML(p.chapter || '')}" placeholder="e.g. CHAPTER 01 · FOUNDATIONS">
+        </label>
 
-      <label>Introductory line
-        <input name="lead" value="${escapeHTML(p.lead || '')}">
-      </label>
+        <label>Page title
+          <input name="title" value="${escapeHTML(p.title || '')}" placeholder="Enter the page title">
+        </label>
 
-      <label>Article content
-        <textarea name="body_html" rows="12">${escapeHTML(
-          p.body_html || '<p>Write your article here…</p>'
-        )}</textarea>
-      </label>
+        <label>Introductory line
+          <input name="lead" value="${escapeHTML(p.lead || '')}">
+        </label>
 
-      <p class="editor-help">
-        Content accepts basic HTML such as &lt;p&gt;, &lt;h3&gt;,
-        &lt;ul&gt;, &lt;li&gt;, &lt;strong&gt; and &lt;blockquote&gt;.
-      </p>
+        <label>Article content
+          <textarea name="body_html" rows="12">${escapeHTML(p.body_html || '<p>Write your article here…</p>')}</textarea>
+        </label>
+
+        <p class="editor-help">
+          Content accepts basic HTML such as &lt;p&gt;, &lt;h3&gt;,
+          &lt;ul&gt;, &lt;li&gt;, &lt;strong&gt; and &lt;blockquote&gt;.
+        </p>
+      </div>
 
       <label>Publication status
         <select name="status">
-          <option value="draft" ${p.status !== 'published' ? 'selected' : ''}>
-            Draft — private
-          </option>
-          <option value="published" ${p.status === 'published' ? 'selected' : ''}>
-            Published — visible to visitors
-          </option>
+          <option value="draft" ${p.status !== 'published' ? 'selected' : ''}>Draft — private</option>
+          <option value="published" ${p.status === 'published' ? 'selected' : ''}>Published — visible to visitors</option>
         </select>
       </label>
 
@@ -462,22 +471,23 @@ function editorForm(p = {}) {
     </form>
   </div>`;
 
-  document.querySelector('#cancelEdit').onclick = () => {
-    target.innerHTML = '';
+  document.querySelector('#pageType').onchange = e => {
+    document.querySelector('#contentFields').hidden = e.target.value === 'blank';
   };
+
+  document.querySelector('#cancelEdit').onclick = () => { target.innerHTML = ''; };
 
   document.querySelector('#pageForm').onsubmit = async e => {
     e.preventDefault();
-
     const fd = new FormData(e.currentTarget);
+    const type = fd.get('page_type');
 
     const payload = {
-      chapter: fd.get('chapter'),
-      title: fd.get('title'),
-      lead: fd.get('lead'),
-      body_html: DOMPurify.sanitize(fd.get('body_html'), {
-        USE_PROFILES: { html: true }
-      }),
+      page_type: type,
+      chapter: type === 'blank' ? null : (fd.get('chapter') || null),
+      title: type === 'blank' ? null : (fd.get('title') || null),
+      lead: type === 'blank' ? '' : (fd.get('lead') || ''),
+      body_html: type === 'blank' ? '' : DOMPurify.sanitize(fd.get('body_html') || '', { USE_PROFILES: { html: true } }),
       status: fd.get('status'),
       updated_at: new Date().toISOString(),
       sort_order: p.sort_order ?? Date.now()
@@ -487,27 +497,15 @@ function editorForm(p = {}) {
       ? await supabase.from('notebook_pages').update(payload).eq('id', p.id)
       : await supabase.from('notebook_pages').insert(payload);
 
-    document.querySelector('#editorMessage').textContent =
-      result.error ? result.error.message : 'Saved successfully.';
-
-    if (!result.error) {
-      setTimeout(showDashboard, 500);
-    }
+    document.querySelector('#editorMessage').textContent = result.error ? result.error.message : 'Saved successfully.';
+    if (!result.error) setTimeout(showDashboard, 500);
   };
 
   if (p.id) {
     document.querySelector('#deletePage').onclick = async () => {
       if (confirm('Delete this page permanently?')) {
-        const { error } = await supabase
-          .from('notebook_pages')
-          .delete()
-          .eq('id', p.id);
-
-        if (error) {
-          alert(error.message);
-        } else {
-          showDashboard();
-        }
+        const { error } = await supabase.from('notebook_pages').delete().eq('id', p.id);
+        if (error) alert(error.message); else showDashboard();
       }
     };
   }
