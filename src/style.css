@@ -353,6 +353,11 @@ button:disabled {
     visibility: hidden;
 }
 
+/* During the desktop cover opening, show the first spread beneath the cover. */
+.book.is-turning.is-cover-opening > .paper {
+    visibility: visible;
+}
+
 .turn-sheet.turned-forward {
     transform: rotateY(-180deg);
 }
@@ -445,12 +450,9 @@ button:disabled {
 }
 
 .flip-page .cover-content {
-    position: relative;
-    inset: auto;
-    width: 100%;
+    position: absolute;
+    inset: 0;
     height: 100%;
-    box-sizing: border-box;
-    margin: 0;
 }
 
 .turn-hint {
