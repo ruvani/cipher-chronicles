@@ -257,7 +257,7 @@ function pageMarkup(p, number) {
   }
 
   return `<div class="page-inner">
-    <div class="chapter-label">${escapeHTML(p.chapter)}</div>
+    ${p.page_type === 'continuation' ? '' : `<div class="chapter-label">${escapeHTML(p.chapter || '')}</div>`}
     <h2>${escapeHTML(p.title)}</h2>
     <div class="short-rule"></div>
     ${p.lead ? `<p class="lead">${escapeHTML(p.lead)}</p>` : ''}
@@ -318,7 +318,7 @@ function draw() {
   }
 
   const btns = pages.map((p, i) => ({ p, i }))
-    .filter(({ p }) => p.page_type !== 'blank' && p.title)
+    .filter(({ p }) => p.page_type !== 'blank' && p.page_type !== 'continuation' && p.title)
     .map(({ p, i }) => {
       const spread = Math.floor((i + 2) / 2);
       const pageIndex = i + 2;
@@ -562,7 +562,7 @@ async function showDashboard() {
         <div>
           <span class="status-tag ${p.status}">${p.status}</span>
           <h3>${p.page_type === 'blank' ? 'Blank page' : escapeHTML(p.title || 'Untitled page')}</h3>
-          <small>${p.page_type === 'blank' ? 'No chapter content' : escapeHTML(p.chapter || '')}</small>
+          <small>${p.page_type === 'blank' ? 'No chapter content' : p.page_type === 'continuation' ? `Continuation · ${escapeHTML(p.chapter || 'Chapter not assigned')}` : escapeHTML(p.chapter || '')}</small>
         </div>
         <button data-edit="${p.id}" class="quiet">Edit</button>
       </article>
@@ -589,6 +589,8 @@ async function showDashboard() {
 function editorForm(p = {}) {
   const target = document.querySelector('#editor');
   const pageType = p.page_type || 'content';
+  const isBlank = pageType === 'blank';
+  const isContinuation = pageType === 'continuation';
 
   target.innerHTML = `<div class="editor-card">
     <h3>${p.id ? 'Edit page' : 'Create a page'}</h3>
@@ -596,15 +598,22 @@ function editorForm(p = {}) {
     <form id="pageForm">
       <label>Page type
         <select name="page_type" id="pageType">
-          <option value="content" ${pageType === 'content' ? 'selected' : ''}>Content page</option>
-          <option value="blank" ${pageType === 'blank' ? 'selected' : ''}>Blank page</option>
+          <option value="content" ${pageType === 'content' ? 'selected' : ''}>Chapter page</option>
+          <option value="continuation" ${isContinuation ? 'selected' : ''}>Continuation page (same chapter)</option>
+          <option value="blank" ${isBlank ? 'selected' : ''}>Blank page</option>
         </select>
       </label>
 
-      <div id="contentFields" ${pageType === 'blank' ? 'hidden' : ''}>
-        <label>Chapter / section
-          <input name="chapter" value="${escapeHTML(p.chapter || '')}" placeholder="e.g. CHAPTER 01 · FOUNDATIONS">
-        </label>
+      <div id="contentFields" ${isBlank ? 'hidden' : ''}>
+        <div id="chapterField" ${isContinuation ? 'hidden' : ''}>
+          <label>Chapter / section
+            <input name="chapter" value="${escapeHTML(p.chapter || '')}" placeholder="e.g. CHAPTER 01 · FOUNDATIONS">
+          </label>
+        </div>
+
+        <p id="continuationHelp" class="editor-help" ${isContinuation ? '' : 'hidden'}>
+          This page will automatically continue the chapter of the nearest preceding content page. No chapter heading will be printed again.
+        </p>
 
         <label>Page title
           <input name="title" value="${escapeHTML(p.title || '')}" placeholder="Enter the page title">
@@ -617,7 +626,6 @@ function editorForm(p = {}) {
         <label>Article content
           <textarea name="body_html" rows="12">${escapeHTML(p.body_html || '<p>Write your article here…</p>')}</textarea>
         </label>
-
 
         <p class="editor-help">
           Content accepts basic HTML such as &lt;p&gt;, &lt;h3&gt;,
@@ -642,9 +650,12 @@ function editorForm(p = {}) {
     </form>
   </div>`;
 
-  document.querySelector('#pageType').onchange = e => {
-    document.querySelector('#contentFields').hidden = e.target.value === 'blank';
+  const syncPageTypeFields = type => {
+    document.querySelector('#contentFields').hidden = type === 'blank';
+    document.querySelector('#chapterField').hidden = type === 'continuation';
+    document.querySelector('#continuationHelp').hidden = type !== 'continuation';
   };
+  document.querySelector('#pageType').onchange = e => syncPageTypeFields(e.target.value);
 
   document.querySelector('#cancelEdit').onclick = () => { target.innerHTML = ''; };
 
@@ -652,16 +663,41 @@ function editorForm(p = {}) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const type = fd.get('page_type');
+    const sortOrder = p.sort_order ?? Date.now();
+    let chapter = type === 'blank' ? null : (fd.get('chapter') || null);
+
+    if (type === 'continuation') {
+      // For a new continuation, inherit the chapter from the closest earlier
+      // non-blank page. For edits, retain the chapter already assigned.
+      chapter = p.chapter || null;
+      if (!chapter) {
+        const { data: earlierPages, error: lookupError } = await supabase
+          .from('notebook_pages')
+          .select('page_type,chapter,sort_order')
+          .lt('sort_order', sortOrder)
+          .order('sort_order', { ascending: false })
+          .limit(100);
+        if (lookupError) {
+          document.querySelector('#editorMessage').textContent = lookupError.message;
+          return;
+        }
+        chapter = (earlierPages || []).find(row => row.page_type !== 'blank' && row.chapter)?.chapter || null;
+      }
+      if (!chapter) {
+        document.querySelector('#editorMessage').textContent = 'There is no earlier chapter to continue. Create a Chapter page first.';
+        return;
+      }
+    }
 
     const payload = {
       page_type: type,
-      chapter: type === 'blank' ? null : (fd.get('chapter') || null),
+      chapter,
       title: type === 'blank' ? null : (fd.get('title') || null),
       lead: type === 'blank' ? '' : (fd.get('lead') || ''),
-      body_html: type === 'blank' ? '' : DOMPurify.sanitize(fd.get('body_html') || '', { USE_PROFILES: { html: true } }).replace(/<div\b(?=[^>]*data-visual=[\"']digital-signature[\"'])[^>]*>\s*<\/div>/gi, ''),
+      body_html: type === 'blank' ? '' : DOMPurify.sanitize(fd.get('body_html') || '', { USE_PROFILES: { html: true } }).replace(/<div\b(?=[^>]*data-visual=["']digital-signature["'])[^>]*>\s*<\/div>/gi, ''),
       status: fd.get('status'),
       updated_at: new Date().toISOString(),
-      sort_order: p.sort_order ?? Date.now()
+      sort_order: sortOrder
     };
 
     const result = p.id
@@ -674,15 +710,13 @@ function editorForm(p = {}) {
 
   if (p.id) {
     document.querySelector('#deletePage').onclick = async () => {
-      if (confirm('Delete this page permanently?')) {
-        const { error } = await supabase.from('notebook_pages').delete().eq('id', p.id);
-        if (error) alert(error.message); else showDashboard();
-      }
+      if (!confirm('Delete this page permanently?')) return;
+      const result = await supabase.from('notebook_pages').delete().eq('id', p.id);
+      if (result.error) document.querySelector('#editorMessage').textContent = result.error.message;
+      else showDashboard();
     };
   }
 }
-
-/* Application routing */
 
 async function route() {
   if (location.hash === '#admin') {
