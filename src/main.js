@@ -209,13 +209,15 @@ function pageMarkup(p, number) {
       <h2>Contents</h2>
       <div class="short-rule"></div>
       <ol class="toc-list">
-        ${p.chapters.map(ch => `
-          <li>
-  <button type="button" data-toc-page-index="${ch.pageIndex}">
-    <span>${escapeHTML(ch.label)}</span>
-    <span>${String(ch.pageNumber).padStart(2, '0')}</span>
-  </button>
-</li>
+      ${p.chapters.map(ch => `
+  <li>
+    <button type="button" data-toc-page-index="${ch.pageIndex}">
+      <span class="toc-chapter">${escapeHTML(ch.label)}</span>
+      <span class="toc-name">${escapeHTML(ch.title)}</span>
+      <span class="toc-page-number">${String(ch.pageNumber).padStart(2, '0')}</span>
+    </button>
+  </li>
+
         `).join('')}
       </ol>
       <div class="folio">${String(number).padStart(2, '0')}</div>
