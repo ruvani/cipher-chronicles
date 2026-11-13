@@ -303,8 +303,11 @@ button:disabled {
 }
 
 .cover-content h1 {
-    font: 600 clamp(2rem, 4.2vw, 3.4rem)/.95 'Cormorant Garamond', serif;
-    letter-spacing: .13em;
+    width: 100%;
+    max-width: 100%;
+    white-space: nowrap;
+    font: 600 clamp(1.15rem, 2.6vw, 2rem)/1 'Cormorant Garamond', serif;
+    letter-spacing: .055em;
     color: #f0dfbd;
     margin: 15px 0;
     text-shadow: 0 2px 9px #0008
@@ -344,6 +347,10 @@ button:disabled {
 
 .turn-sheet.is-flipping {
     visibility: visible;
+}
+
+.book.is-turning > .paper {
+    visibility: hidden;
 }
 
 .turn-sheet.turned-forward {
