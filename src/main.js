@@ -208,11 +208,11 @@ function pageMarkup(p, number) {
       <ol class="toc-list">
         ${p.chapters.map(ch => `
           <li>
-            <button type="button" data-toc-page-index="${ch.pageIndex}">
-              <span>${escapeHTML(ch.label)}</span>
-              <span>${String(ch.pageNumber).padStart(2, '0')}</span>
-            </button>
-          </li>
+  <button type="button" data-toc-page-index="${ch.pageIndex}">
+    <span>${escapeHTML(ch.label)}</span>
+    <span>${String(ch.pageNumber).padStart(2, '0')}</span>
+  </button>
+</li>
         `).join('')}
       </ol>
       <div class="folio">${String(number).padStart(2, '0')}</div>
