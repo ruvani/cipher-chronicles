@@ -688,3 +688,47 @@ footer {
 .blank-page {
     min-height: 100%;
 }
+
+
+/* Automatically generated table of contents */
+.toc-page h2 {
+    text-align: center;
+    margin: 12px 0 10px;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(25px, 3vw, 38px);
+    color: var(--ink);
+}
+.toc-entries {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    margin-top: 22px;
+}
+.toc-entry {
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+    width: 100%;
+    padding: 4px 0;
+    border: 0;
+    background: transparent;
+    color: var(--ink);
+    text-align: left;
+    cursor: pointer;
+    font: 600 clamp(10px, 1vw, 13px) 'Cormorant Garamond', serif;
+}
+.toc-entry:hover .toc-name { text-decoration: underline; }
+.toc-number, .toc-page-number {
+    flex: 0 0 auto;
+    color: #927447;
+    font-family: 'Special Elite', monospace;
+    font-size: 10px;
+}
+.toc-name { flex: 0 1 auto; }
+.toc-dots {
+    flex: 1 1 auto;
+    min-width: 8px;
+    border-bottom: 1px dotted #a88e67;
+    transform: translateY(-3px);
+}
+.toc-page-number { min-width: 18px; text-align: right; }
