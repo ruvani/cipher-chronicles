@@ -181,12 +181,12 @@ function getBookPages() {
       const originalIndex = pages.indexOf(p);
 
       chapters.push({
-        label,
-        title: p.title || label,
-        pageNumber: originalIndex + 3,
-        pageIndex: originalIndex + 2,
-        spread: Math.floor((originalIndex + 2) / 2)
-      });
+  label,
+  title: p.title || label,
+  pageNumber: originalIndex + 3,
+  pageIndex: originalIndex + 2,
+  spread: Math.floor((originalIndex + 2) / 2)
+});
     }
   });
 
