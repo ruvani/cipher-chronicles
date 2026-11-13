@@ -114,7 +114,45 @@ function shell() {
   });
 }
 
+function getBookPages() {
+  const contentPages = pages.filter(p => p.page_type !== 'blank' && p.title);
+  const chapters = [];
+  const seen = new Set();
+
+  contentPages.forEach(p => {
+    const label = (p.chapter || p.title || 'Untitled chapter').trim();
+    if (!seen.has(label)) {
+      seen.add(label);
+      const originalIndex = pages.indexOf(p);
+      chapters.push({
+        label,
+        title: p.title || label,
+        pageNumber: originalIndex + 3,
+        spread: Math.floor((originalIndex + 2) / 2)
+      });
+    }
+  });
+
+  // Reserve the first left-hand page as a blank verso so the contents
+  // appears on the first right-hand page, like a printed book.
+  if (!chapters.length) return [...pages];
+  return [
+    { page_type: 'blank', _system: true },
+    { page_type: 'toc', chapters, _system: true },
+    ...pages
+  ];
+}
+
 function pageMarkup(p, number) {
+  if (p && p.page_type === 'toc') {
+    return `<div class="page-inner toc-page">
+      <div class="chapter-label">CIPHER CHRONICLES</div>
+      <h2>Contents</h2>
+      <div class="short-rule"></div>
+      <div class="toc-entries">${p.chapters.map((c, i) => `<button class="toc-entry" data-toc-spread="${c.spread}"><span class="toc-number">${String(i + 1).padStart(2, '0')}</span><span class="toc-name">${escapeHTML(c.label)}</span><span class="toc-dots"></span><span class="toc-page-number">${c.pageNumber}</span></button>`).join('')}</div>
+      <div class="folio">01</div>
+    </div>`;
+  }
   if (p && p.page_type === 'blank') {
     return '<div class="page-inner blank-page" aria-label="Blank page"></div>';
   }
@@ -143,8 +181,9 @@ function spreadMarkup(spreadIndex) {
       <div class="flip-page flip-right">${coverHTML()}</div>`;
   }
 
-  const leftPage = pages[spreadIndex * 2];
-  const rightPage = pages[spreadIndex * 2 + 1];
+  const bookPages = getBookPages();
+  const leftPage = bookPages[spreadIndex * 2];
+  const rightPage = bookPages[spreadIndex * 2 + 1];
 
   return `<div class="flip-page flip-left">
       ${leftPage ? pageMarkup(leftPage, spreadIndex * 2 + 1) : ''}
@@ -155,8 +194,9 @@ function spreadMarkup(spreadIndex) {
 }
 
 function draw() {
-  const left = index < 0 ? null : pages[index * 2];
-  const right = index < 0 ? null : pages[index * 2 + 1];
+  const bookPages = getBookPages();
+  const left = index < 0 ? null : bookPages[index * 2];
+  const right = index < 0 ? null : bookPages[index * 2 + 1];
 
   document.querySelector('#leftPaper').innerHTML =
     index < 0 ? '' : pageMarkup(left, index * 2 + 1);
@@ -164,7 +204,7 @@ function draw() {
   document.querySelector('#rightPaper').innerHTML =
     index < 0 ? coverHTML() : pageMarkup(right, index * 2 + 2);
 
-  const count = Math.max(1, Math.ceil(pages.length / 2));
+  const count = Math.max(1, Math.ceil(bookPages.length / 2));
 
   document.querySelector('#pageCounter').textContent =
     index < 0 ? 'THE COVER' : `SPREAD ${index + 1} / ${count}`;
@@ -176,7 +216,7 @@ function draw() {
     .map((p, i) => ({ p, i }))
     .filter(({ p }) => p.page_type !== 'blank' && p.title)
     .map(({ p, i }) => {
-      const spread = Math.floor(i / 2);
+      const spread = Math.floor((i + 2) / 2);
       return `<button data-spread="${spread}">${escapeHTML(
         p.chapter || p.title || `Page ${i + 1}`
       )}</button>`;
@@ -191,6 +231,14 @@ function draw() {
       draw();
     };
   });
+
+  document.querySelectorAll('[data-toc-spread]').forEach(b => {
+    b.onclick = () => {
+      index = Number(b.dataset.tocSpread);
+      draw();
+      document.querySelector('.book-stage')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    };
+  });
 }
 
 /* Page-turn animation: animate the complete two-page spread */
@@ -200,7 +248,7 @@ let flipping = false;
 function turn(dir) {
   if (flipping) return;
 
-  const maxSpread = Math.max(0, Math.ceil(pages.length / 2) - 1);
+  const maxSpread = Math.max(0, Math.ceil(getBookPages().length / 2) - 1);
   const target = Math.max(-1, Math.min(maxSpread, index + dir));
 
   if (target === index) return;
@@ -222,7 +270,8 @@ function turn(dir) {
   if (openingCover) {
     sheet.classList.add('cover-opening');
     front.innerHTML = `<div class="flip-page flip-right cover-leaf">${coverHTML()}</div>`;
-    back.innerHTML = `<div class="flip-page flip-left cover-reveal">${pages[0] ? pageMarkup(pages[0], 1) : ''}</div>`;
+    const firstBookSpread = getBookPages();
+    back.innerHTML = `<div class="flip-page flip-left cover-reveal">${pageMarkup(firstBookSpread[0], 1)}</div>`;
   } else {
     sheet.classList.remove('cover-opening');
     front.innerHTML = spreadMarkup(index);
