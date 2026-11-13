@@ -359,7 +359,13 @@ function turn(dir) {
   book.classList.add('is-turning');
 
   if (openingCover) {
+    // Desktop: place the first real spread underneath the turning cover.
+    // The left page is the intentional blank verso; the right page is Contents.
+    // Keep this change desktop-only so the already-working mobile turn is untouched.
     sheet.classList.add('cover-opening');
+    book.classList.add('is-cover-opening');
+    document.querySelector('#leftPaper').innerHTML = pageMarkup(bookPages[0], 1);
+    document.querySelector('#rightPaper').innerHTML = pageMarkup(bookPages[1], 2);
     front.innerHTML = `<div class="flip-page flip-right cover-leaf">${coverHTML()}</div>`;
     back.innerHTML = `<div class="flip-page flip-left cover-reveal">${pageMarkup(bookPages[0], 1)}</div>`;
   } else {
@@ -375,7 +381,7 @@ function turn(dir) {
   window.setTimeout(() => {
     sheet.classList.remove('is-flipping', 'turned-forward', 'turned-backward', 'cover-opening');
     sheet.style.transform = 'rotateY(0deg)';
-    book.classList.remove('is-turning');
+    book.classList.remove('is-turning', 'is-cover-opening');
     index = target;
     draw();
     flipping = false;
