@@ -1,4 +1,3 @@
-
 import { createClient } from '@supabase/supabase-js';
 import DOMPurify from 'dompurify';
 import './style.css';
@@ -39,8 +38,60 @@ const safeBody = html =>
   DOMPurify.sanitize(html || '<p></p>', { USE_PROFILES: { html: true } });
 
 // Remove the built-in interactive digital-signature diagram marker.
+// Article text and separately embedded GIF animations remain untouched.
 function renderVisualMarkers(html) {
-  return html.replace(/<div\b(?=[^>]*data-visual=["']digital-signature["'])[^>]*>\s*<\/div>/gi, '');
+  return html.replace(/<div\b(?=[^>]*data-visual=[\"']digital-signature[\"'])[^>]*>\s*<\/div>/gi, '');
+}
+
+function digitalSignatureVisualHTML() {
+  return `<section class="visual-explainer" data-visual-widget="digital-signature" aria-label="Animated digital signature process">
+    <div class="visual-heading"><span>INTERACTIVE VISUAL</span><h3>How a Digital Signature Works</h3></div>
+    <svg class="signature-flow" viewBox="0 0 680 250" role="img" aria-label="Alice's message is hashed, signed with her private key, sent to Bob and verified with her public key">
+      <defs><marker id="sigArrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#987344"/></marker></defs>
+      <path class="flow-line" d="M112 88 H210 M278 88 H376 M444 88 H542" marker-end="url(#sigArrow)"/>
+      <g class="flow-node node-alice"><rect x="12" y="42" width="100" height="92" rx="10"/><circle cx="62" cy="68" r="13"/><path d="M38 112 Q62 78 86 112"/><text x="62" y="153">Alice</text></g>
+      <g class="flow-node node-hash"><rect x="210" y="42" width="68" height="92" rx="10"/><text x="244" y="81" class="node-icon">#</text><text x="244" y="153">SHA-256</text></g>
+      <g class="flow-node node-sign"><rect x="376" y="42" width="68" height="92" rx="10"/><path d="M398 84 l22 -22 12 12 -22 22 -14 4z"/><text x="410" y="153">Sign</text></g>
+      <g class="flow-node node-bob"><rect x="542" y="42" width="126" height="92" rx="10"/><circle cx="605" cy="68" r="13"/><path d="M580 112 Q605 78 630 112"/><text x="605" y="153">Bob verifies</text></g>
+      <circle class="traveller traveller-one" r="7" cy="88"><animateMotion dur="5s" repeatCount="indefinite" path="M112 88 H542"/></circle>
+      <circle class="traveller traveller-two" r="4" cy="88"><animateMotion dur="5s" begin=".6s" repeatCount="indefinite" path="M112 88 H542"/></circle>
+      <text class="flow-caption" x="340" y="207" text-anchor="middle">Message → Hash → Private-key signature → Public-key verification</text>
+    </svg>
+    <div class="visual-step" aria-live="polite"><strong data-visual-step-title>1. Create the message</strong><span data-visual-step-text>Alice prepares the message she wants to send to Bob.</span></div>
+    <div class="visual-controls"><button type="button" data-visual-prev disabled>← Previous</button><button type="button" class="visual-play" data-visual-play>Pause animation</button><button type="button" data-visual-next>Next step →</button><button type="button" data-visual-replay>Replay</button></div>
+  </section>`;
+}
+
+function wireVisualExplainers() {
+  const steps = [
+    ['1. Create the message', 'Alice prepares the original message. The message itself is not encrypted by the digital-signature operation.'],
+    ['2. Calculate the hash', 'SHA-256 computes a fixed-length digest from the message. A changed message produces a different digest.'],
+    ['3. Sign with the private key', 'Alice uses her private signing key to create a digital signature for the message.'],
+    ['4. Send the message and signature', 'Alice sends Bob the original message, the signature and a trusted copy of her public key.'],
+    ['5. Verify with the public key', 'Bob uses Alice’s public key to verify the signature against the received message.']
+  ];
+  document.querySelectorAll('[data-visual-widget="digital-signature"]').forEach(widget => {
+    if (widget.dataset.wired) return;
+    widget.dataset.wired = 'true';
+    let current = 0, timer = null, playing = true;
+    const title = widget.querySelector('[data-visual-step-title]');
+    const text = widget.querySelector('[data-visual-step-text]');
+    const prev = widget.querySelector('[data-visual-prev]');
+    const next = widget.querySelector('[data-visual-next]');
+    const play = widget.querySelector('[data-visual-play]');
+    const render = () => {
+      title.textContent = steps[current][0]; text.textContent = steps[current][1];
+      prev.disabled = current === 0; next.disabled = current === steps.length - 1;
+      widget.dataset.step = String(current + 1);
+    };
+    const stop = () => { if (timer) clearInterval(timer); timer = null; playing = false; play.textContent = 'Play animation'; widget.classList.add('paused'); };
+    const start = () => { if (timer) clearInterval(timer); playing = true; play.textContent = 'Pause animation'; widget.classList.remove('paused'); timer = setInterval(() => { if (current < steps.length - 1) { current++; render(); } else stop(); }, 3600); };
+    prev.addEventListener('click', () => { stop(); current = Math.max(0, current - 1); render(); });
+    next.addEventListener('click', () => { stop(); current = Math.min(steps.length - 1, current + 1); render(); });
+    play.addEventListener('click', () => playing ? stop() : start());
+    widget.querySelector('[data-visual-replay]').addEventListener('click', () => { current = 0; render(); start(); });
+    render(); start();
+  });
 }
 
 const coverHTML = () => `<div class="cover-content">
@@ -109,8 +160,7 @@ function shell() {
     else if (e.clientX < r.left + r.width * 0.22) turn(-1);
   });
 
-  // Mobile horizontal swipe navigation.
-  // Vertical movement remains available for scrolling.
+  // Mobile horizontal swipe navigation. Vertical movement remains available for scrolling.
   const bookSurface = document.querySelector('#book');
   let swipeStartX = 0;
   let swipeStartY = 0;
@@ -121,12 +171,10 @@ function shell() {
       swipeTarget = null;
       return;
     }
-
     if (e.target.closest('a, button, input, textarea, select, [data-no-page-swipe]')) {
       swipeTarget = null;
       return;
     }
-
     swipeTarget = e.target;
     swipeStartX = e.touches[0].clientX;
     swipeStartY = e.touches[0].clientY;
@@ -134,19 +182,16 @@ function shell() {
 
   bookSurface.addEventListener('touchend', e => {
     if (!mobileBook() || swipeTarget === null || e.changedTouches.length !== 1) return;
-
     const dx = e.changedTouches[0].clientX - swipeStartX;
     const dy = e.changedTouches[0].clientY - swipeStartY;
     swipeTarget = null;
 
+    // Require a deliberate horizontal gesture; ignore taps and vertical scrolling.
     if (Math.abs(dx) < 55 || Math.abs(dx) < Math.abs(dy) * 1.25) return;
-
     turn(dx < 0 ? 1 : -1);
   }, { passive: true });
 
-  bookSurface.addEventListener('touchcancel', () => {
-    swipeTarget = null;
-  }, { passive: true });
+  bookSurface.addEventListener('touchcancel', () => { swipeTarget = null; }, { passive: true });
 
   document.addEventListener('keydown', e => {
     if (
@@ -159,45 +204,61 @@ function shell() {
   });
 }
 
-function mobileBook() {
-  return window.matchMedia('(max-width: 700px)').matches;
-}
-
 function getBookPages() {
   const contentPages = pages.filter(p =>
-    p.page_type !== 'blank' &&
-    p.page_type !== 'continuation' &&
-    p.title
+    p.page_type !== 'blank' && p.page_type !== 'continuation' && p.title
   );
-
   const chapters = [];
   const seen = new Set();
 
   contentPages.forEach(p => {
     const label = (p.chapter || p.title || 'Untitled chapter').trim();
-
     if (!seen.has(label)) {
       seen.add(label);
-      const originalIndex = pages.indexOf(p);
-
-  const chapterName = (p.chapter || '').trim();
-const pageTitle = (p.title || '').trim();
-
-chapters.push({
-  label: chapterName,
-  title: pageTitle,
-  pageNumber: originalIndex + 3,
-  pageIndex: originalIndex + 2,
-  spread: Math.floor((originalIndex + 2) / 2)
-});
+      chapters.push({
+        label,
+        title: p.title || label,
+        originalIndex: pages.indexOf(p)
+      });
     }
   });
 
   if (!chapters.length) return [...pages];
 
+  // Keep five entries on each Contents page. Add more Contents pages
+  // automatically when the notebook grows beyond that capacity.
+  const entriesPerContentsPage = 5;
+  const contentsPageCount = Math.ceil(chapters.length / entriesPerContentsPage);
+  const contentsPages = [];
+
+  for (let page = 0; page < contentsPageCount; page++) {
+    const pageIndex = page + 1; // index 0 is the intentional blank verso
+    const pageChapters = chapters.slice(
+      page * entriesPerContentsPage,
+      (page + 1) * entriesPerContentsPage
+    ).map(chapter => {
+      // Authored pages begin after the blank page and all Contents pages.
+      const bookPageIndex = contentsPageCount + 1 + chapter.originalIndex;
+      return {
+        ...chapter,
+        pageIndex: bookPageIndex,
+        pageNumber: bookPageIndex + 1,
+        spread: Math.floor(bookPageIndex / 2)
+      };
+    });
+
+    contentsPages.push({
+      page_type: 'toc',
+      chapters: pageChapters,
+      contentsPageNumber: page + 1,
+      _system: true
+    });
+  }
+
+  // The first Contents page remains on the right-hand side after the blank verso.
   return [
     { page_type: 'blank', _system: true },
-    { page_type: 'toc', chapters, _system: true },
+    ...contentsPages,
     ...pages
   ];
 }
@@ -208,546 +269,520 @@ function pageMarkup(p, number) {
       <div class="chapter-label">CIPHER CHRONICLES</div>
       <h2>Contents</h2>
       <div class="short-rule"></div>
-      <ol class="toc-list">
-      ${p.chapters.map(ch => `
-  <li>
-    <button type="button" data-toc-page-index="${ch.pageIndex}">
-      <span class="toc-chapter">${escapeHTML(ch.label)}</span>
-      <span class="toc-name">${escapeHTML(ch.title)}</span>
-      <span class="toc-page-number">${String(ch.pageNumber).padStart(2, '0')}</span>
-    </button>
-  </li>
-
-        `).join('')}
-      </ol>
-      <div class="folio">${String(number).padStart(2, '0')}</div>
+      <div class="toc-entries">${p.chapters.map((c, i) => `<button class="toc-entry" data-toc-spread="${c.spread}" data-toc-page-index="${c.pageIndex}"><span class="toc-number">${String(i + 1).padStart(2, '0')}</span><span class="toc-name">${escapeHTML(c.label)}</span><span class="toc-dots"></span><span class="toc-page-number">${c.pageNumber}</span></button>`).join('')}</div>
+      <div class="folio">${String(p.contentsPageNumber || 1).padStart(2, '0')}</div>
+    </div>`;
+  }
+  if (p && p.page_type === 'blank') {
+    return '<div class="page-inner blank-page" aria-label="Blank page"></div>';
+  }
+  if (!p) {
+    return `<div class="page-inner endpaper">
+      <span class="eyebrow">THE JOURNEY CONTINUES</span>
+      <h2>To be continued…</h2>
+      <p>Every discovery begins with a question.</p>
+      <span class="folio">✦</span>
     </div>`;
   }
 
-  if (p && p.page_type === 'blank') {
-    return `<div class="page-inner blank-page"></div>`;
-  }
-
-  if (!p) {
-    return `<div class="page-inner blank-page"></div>`;
-  }
-
-  const isContinuation = p.page_type === 'continuation';
-
-  const heading = p.title && String(p.title).trim() &&
-    String(p.title).toLowerCase() !== 'null'
-      ? `<h2>${escapeHTML(p.title)}</h2><div class="short-rule"></div>`
-      : '';
-
   return `<div class="page-inner">
-    ${!isContinuation && p.chapter ? `<div class="chapter-label">${escapeHTML(p.chapter)}</div>` : ''}
-    ${heading}
+    ${p.page_type === 'continuation' ? '' : `<div class="chapter-label">${escapeHTML(p.chapter || '')}</div>`}
+    ${p.title && String(p.title).trim() && String(p.title).toLowerCase() !== 'null' ? `<h2>${escapeHTML(p.title)}</h2><div class="short-rule"></div>` : ''}
     ${p.lead ? `<p class="lead">${escapeHTML(p.lead)}</p>` : ''}
-    <div class="page-body">${renderVisualMarkers(safeBody(p.body_html))}</div>
+    <div class="article-body">${renderVisualMarkers(safeBody(p.body_html))}</div>
     <div class="folio">${String(number).padStart(2, '0')}</div>
   </div>`;
 }
 
-function draw() {
-  const bookPages = getBookPages();
-  const left = document.querySelector('#leftPaper');
-  const right = document.querySelector('#rightPaper');
-  const counter = document.querySelector('#pageCounter');
-  const prev = document.querySelector('#prev');
-  const next = document.querySelector('#next');
-  const chapterButtons = document.querySelector('#chapterButtons');
-
-  if (!left || !right) return;
-
-  if (index < 0) {
-    left.innerHTML = '';
-    right.innerHTML = coverHTML();
-    counter.textContent = 'THE COVER';
-    prev.disabled = true;
-    next.disabled = false;
-  } else if (mobileBook()) {
-    left.innerHTML = '';
-    right.innerHTML = pageMarkup(bookPages[index], index + 1);
-    counter.textContent = `PAGE ${index + 1} / ${bookPages.length}`;
-    prev.disabled = index <= -1;
-    next.disabled = index >= bookPages.length - 1;
-  } else {
-    const leftIndex = index * 2;
-    const rightIndex = leftIndex + 1;
-
-    left.innerHTML = pageMarkup(bookPages[leftIndex], leftIndex + 1);
-    right.innerHTML = pageMarkup(bookPages[rightIndex], rightIndex + 1);
-
-    counter.textContent = `SPREAD ${index + 1} / ${Math.ceil(bookPages.length / 2)}`;
-    prev.disabled = index < 0;
-    next.disabled = rightIndex >= bookPages.length - 1;
+function spreadMarkup(spreadIndex) {
+  if (spreadIndex < 0) {
+    return `<div class="flip-page flip-left"></div>
+      <div class="flip-page flip-right">${coverHTML()}</div>`;
   }
 
-  chapterButtons.innerHTML = bookPages
-    .filter(p => p.page_type !== 'blank' && p.page_type !== 'continuation' && p.title)
-    .map(p => {
-      const pageIndex = bookPages.indexOf(p);
-      const spread = Math.floor(pageIndex / 2);
+  const bookPages = getBookPages();
+  const leftPage = bookPages[spreadIndex * 2];
+  const rightPage = bookPages[spreadIndex * 2 + 1];
 
-      return `<button type="button"
-        data-page-index="${pageIndex}"
-        data-spread="${spread}">
-        ${escapeHTML(p.chapter || p.title)}
-      </button>`;
-    }).join('');
-
-  document.querySelectorAll('[data-toc-page-index]').forEach(button => {
-    button.addEventListener('click', e => {
-      e.stopPropagation();
-      const target = Number(button.dataset.tocPageIndex);
-
-      if (mobileBook()) {
-        index = target;
-      } else {
-        index = Math.floor(target / 2);
-      }
-
-      draw();
-    });
-  });
-
-  chapterButtons.querySelectorAll('button').forEach(button => {
-    button.addEventListener('click', () => {
-      if (mobileBook()) {
-        index = Number(button.dataset.pageIndex);
-      } else {
-        index = Number(button.dataset.spread);
-      }
-
-      draw();
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    });
-  });
+  return `<div class="flip-page flip-left">
+      ${leftPage ? pageMarkup(leftPage, spreadIndex * 2 + 1) : ''}
+    </div>
+    <div class="flip-page flip-right">
+      ${rightPage ? pageMarkup(rightPage, spreadIndex * 2 + 2) : pageMarkup(null)}
+    </div>`;
 }
 
-let lastMobileMode = mobileBook();
+let lastMobileMode = window.matchMedia('(max-width: 700px)').matches;
 
-window.addEventListener('resize', () => {
-  const currentMode = mobileBook();
-
-  if (currentMode !== lastMobileMode) {
-    if (currentMode) {
-      index = index < 0 ? -1 : index * 2;
-    } else {
-      index = index < 0 ? -1 : Math.floor(index / 2);
-    }
-
-    lastMobileMode = currentMode;
-    draw();
+function draw() {
+  const bookPages = getBookPages();
+  const mobile = mobileBook();
+  if (mobile !== lastMobileMode) {
+    if (index >= 0) index = mobile ? index * 2 : Math.floor(index / 2);
+    lastMobileMode = mobile;
   }
-});
+
+  if (mobile) {
+    const current = index < 0 ? null : bookPages[index];
+    document.querySelector('#leftPaper').innerHTML = '';
+    document.querySelector('#rightPaper').innerHTML =
+      index < 0 ? coverHTML() : pageMarkup(current, index + 1);
+    document.querySelector('#pageCounter').textContent =
+      index < 0 ? 'THE COVER' : `PAGE ${index + 1} / ${bookPages.length}`;
+    document.querySelector('#prev').disabled = index < 0;
+    document.querySelector('#next').disabled = index >= bookPages.length - 1;
+  } else {
+    const left = index < 0 ? null : bookPages[index * 2];
+    const right = index < 0 ? null : bookPages[index * 2 + 1];
+    document.querySelector('#leftPaper').innerHTML =
+      index < 0 ? '' : pageMarkup(left, index * 2 + 1);
+    document.querySelector('#rightPaper').innerHTML =
+      index < 0 ? coverHTML() : pageMarkup(right, index * 2 + 2);
+    const count = Math.max(1, Math.ceil(bookPages.length / 2));
+    document.querySelector('#pageCounter').textContent =
+      index < 0 ? 'THE COVER' : `SPREAD ${index + 1} / ${count}`;
+    document.querySelector('#prev').disabled = index < 0;
+    document.querySelector('#next').disabled = index >= count - 1;
+  }
+
+  const btns = pages.map((p, i) => ({ p, i }))
+    .filter(({ p }) => p.page_type !== 'blank' && p.page_type !== 'continuation' && p.title)
+    .map(({ p, i }) => {
+      const spread = Math.floor((i + 2) / 2);
+      const pageIndex = i + 2;
+      return `<button data-spread="${spread}" data-page-index="${pageIndex}">${escapeHTML(p.chapter || p.title || `Page ${i + 1}`)}</button>`;
+    }).join('');
+
+  document.querySelector('#chapterButtons').innerHTML = btns;
+  document.querySelectorAll('#chapterButtons button').forEach(b => {
+    b.onclick = () => {
+      index = mobileBook() ? Number(b.dataset.pageIndex) : Number(b.dataset.spread);
+      draw();
+    };
+  });
+
+  document.querySelectorAll('[data-toc-spread]').forEach(b => {
+    b.onclick = () => {
+      index = mobileBook() ? Number(b.dataset.tocPageIndex) : Number(b.dataset.tocSpread);
+      draw();
+      document.querySelector('.book-stage')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    };
+  });
+  wireVisualExplainers();
+}
+
+/* Page-turn animation: animate the complete two-page spread */
+
+let flipping = false;
+const mobileBook = () => window.matchMedia('(max-width: 700px)').matches;
 
 function turn(dir) {
-  if (editMode) return;
-
+  if (flipping) return;
   const bookPages = getBookPages();
-
-  if (mobileBook()) {
-    const nextIndex = index < 0
-      ? 0
-      : index + dir;
-
-    if (nextIndex < -1 || nextIndex >= bookPages.length) return;
-
-    const sheet = document.querySelector('#turnSheet');
-    const front = document.querySelector('#turnFront');
-    const back = document.querySelector('#turnBack');
-
-    if (!sheet || !front || !back) return;
-
-    if (dir > 0) {
-      front.innerHTML = index < 0 ? coverHTML() : pageMarkup(bookPages[index], index + 1);
-      back.innerHTML = pageMarkup(bookPages[nextIndex], nextIndex + 1);
-    } else {
-      front.innerHTML = pageMarkup(bookPages[index], index + 1);
-      back.innerHTML = index <= 0 ? coverHTML() : pageMarkup(bookPages[nextIndex], nextIndex + 1);
-    }
-
-    sheet.className = 'turn-sheet';
-    sheet.classList.add(dir > 0 ? 'turn-next' : 'turn-prev');
-
-    index = nextIndex;
-    draw();
-    return;
-  }
-
-  const nextIndex = index < 0
-    ? 0
-    : index + dir;
-
-  if (nextIndex < -1 || nextIndex >= Math.ceil(bookPages.length / 2)) return;
-
   const sheet = document.querySelector('#turnSheet');
   const front = document.querySelector('#turnFront');
   const back = document.querySelector('#turnBack');
-
+  const book = document.querySelector('#book');
   if (!sheet || !front || !back) return;
 
-  const leftIndex = index < 0 ? 0 : index * 2;
-  const rightIndex = leftIndex + 1;
-
-  if (dir > 0) {
+  // On narrow screens, turn one physical page at a time so no left-hand pages are skipped.
+  if (mobileBook()) {
+    const target = Math.max(-1, Math.min(bookPages.length - 1, index + dir));
+    if (target === index) return;
+    flipping = true;
+    book.classList.add('is-turning');
     front.innerHTML = index < 0
-      ? coverHTML()
-      : pageMarkup(bookPages[rightIndex], rightIndex + 1);
-
-    back.innerHTML = pageMarkup(bookPages[leftIndex], leftIndex + 1);
-  } else {
-    front.innerHTML = pageMarkup(bookPages[leftIndex], leftIndex + 1);
-    back.innerHTML = index <= 0
-      ? coverHTML()
-      : pageMarkup(bookPages[rightIndex], rightIndex + 1);
+      ? `<div class="flip-page flip-right cover-leaf">${coverHTML()}</div>`
+      : `<div class="flip-page flip-right">${pageMarkup(bookPages[index], index + 1)}</div>`;
+    back.innerHTML = target < 0
+      ? `<div class="flip-page flip-right cover-leaf">${coverHTML()}</div>`
+      : `<div class="flip-page flip-right">${pageMarkup(bookPages[target], target + 1)}</div>`;
+    sheet.classList.remove('cover-opening', 'is-flipping', 'turned-forward', 'turned-backward');
+    sheet.style.transform = 'rotateY(0deg)';
+    sheet.classList.add('is-flipping');
+    void sheet.offsetWidth;
+    requestAnimationFrame(() => sheet.classList.add(dir > 0 ? 'turned-forward' : 'turned-backward'));
+    window.setTimeout(() => {
+      sheet.classList.remove('is-flipping', 'turned-forward', 'turned-backward');
+      sheet.style.transform = 'rotateY(0deg)';
+      book.classList.remove('is-turning');
+      index = target;
+      draw();
+      flipping = false;
+    }, 900);
+    return;
   }
 
-  sheet.className = 'turn-sheet';
-  sheet.classList.add(dir > 0 ? 'turn-next' : 'turn-prev');
-  index = nextIndex;
-  draw();
+  const maxSpread = Math.max(0, Math.ceil(bookPages.length / 2) - 1);
+  const target = Math.max(-1, Math.min(maxSpread, index + dir));
+  if (target === index) return;
+  flipping = true;
+  const openingCover = index === -1 && dir > 0;
+  book.classList.add('is-turning');
+
+  if (openingCover) {
+    // Desktop: place the first real spread underneath the turning cover.
+    // The left page is the intentional blank verso; the right page is Contents.
+    // Keep this change desktop-only so the already-working mobile turn is untouched.
+    sheet.classList.add('cover-opening');
+    book.classList.add('is-cover-opening');
+    document.querySelector('#leftPaper').innerHTML = pageMarkup(bookPages[0], 1);
+    document.querySelector('#rightPaper').innerHTML = pageMarkup(bookPages[1], 2);
+    front.innerHTML = `<div class="flip-page flip-right cover-leaf">${coverHTML()}</div>`;
+    back.innerHTML = `<div class="flip-page flip-left cover-reveal">${pageMarkup(bookPages[0], 1)}</div>`;
+  } else {
+    sheet.classList.remove('cover-opening');
+    front.innerHTML = spreadMarkup(index);
+    back.innerHTML = spreadMarkup(target);
+  }
+  sheet.classList.remove('is-flipping', 'turned-forward', 'turned-backward');
+  sheet.style.transform = 'rotateY(0deg)';
+  sheet.classList.add('is-flipping');
+  void sheet.offsetWidth;
+  requestAnimationFrame(() => sheet.classList.add(dir > 0 ? 'turned-forward' : 'turned-backward'));
+  window.setTimeout(() => {
+    sheet.classList.remove('is-flipping', 'turned-forward', 'turned-backward', 'cover-opening');
+    sheet.style.transform = 'rotateY(0deg)';
+    book.classList.remove('is-turning', 'is-cover-opening');
+    index = target;
+    draw();
+    flipping = false;
+  }, 900);
 }
 
-async function loadPages() {
+/* Load published notebook pages */
+
+async function loadPublicPages() {
   if (!configured) {
     pages = starter;
-    index = -1;
-    draw();
     return;
   }
 
   const { data, error } = await supabase
     .from('notebook_pages')
-    .select('id,page_type,chapter,title,lead,body_html,sort_order,status')
+    .select('id,page_type,chapter,title,lead,body_html,sort_order')
     .eq('status', 'published')
-    .order('sort_order', { ascending: true });
+    .order('sort_order');
 
   if (error) {
-    console.error('Could not load pages:', error);
+    console.error(error);
     pages = starter;
-  } else {
-    pages = data || [];
+    return;
   }
 
-  index = -1;
-  draw();
+  pages = data?.length ? data : starter;
 }
 
-function showAdmin() {
-  location.hash = 'admin';
+/* Check administrator session */
+
+async function checkSession() {
+  if (!configured) return;
+
+  const { data } = await supabase.auth.getSession();
+
+  currentUser = data.session?.user || null;
+
+  if (currentUser) {
+    const { data: membership } = await supabase
+      .from('admin_users')
+      .select('user_id')
+      .eq('user_id', currentUser.id)
+      .maybeSingle();
+
+    isAdmin = !!membership;
+  }
 }
 
-async function loadAdmin() {
-  if (!configured) {
-    alert('Supabase is not configured.');
-    return;
-  }
+/* Administrator login */
 
-  const { data: { user } } = await supabase.auth.getUser();
+function showLogin() {
+  document.querySelector('#publicView').hidden = true;
 
-  if (!user) {
-    app.querySelector('#adminView').innerHTML = `
-      <div class="admin-panel">
-        <h2>Administrator sign in</h2>
-        <form id="loginForm">
-          <label>Email<input type="email" name="email" required></label>
-          <label>Password<input type="password" name="password" required></label>
-          <button type="submit">Sign in</button>
-        </form>
-        <p id="loginMessage"></p>
-      </div>`;
+  const view = document.querySelector('#adminView');
+  view.hidden = false;
 
-    document.querySelector('#loginForm').onsubmit = async e => {
-      e.preventDefault();
-      const fd = new FormData(e.currentTarget);
+  view.innerHTML = `<div class="admin-card">
+    <div class="eyebrow">PRIVATE AUTHOR WORKSPACE</div>
+    <h2>Administrator sign in</h2>
+    <p class="admin-intro">Sign in to write, edit and publish notebook pages.</p>
 
-      const { error } = await supabase.auth.signInWithPassword({
-        email: fd.get('email'),
-        password: fd.get('password')
-      });
+    <form id="loginForm">
+      <label>Email address
+        <input name="email" type="email" required autocomplete="username">
+      </label>
 
-      document.querySelector('#loginMessage').textContent =
-        error ? error.message : 'Signed in. Loading admin…';
+      <label>Password
+        <input name="password" type="password" required autocomplete="current-password">
+      </label>
 
-      if (!error) loadAdmin();
-    };
+      <button class="gold-button" type="submit">Sign in</button>
+    </form>
 
-    return;
-  }
+    <p class="form-message" id="loginMessage"></p>
+    <a href="#" id="backPublic">← Return to the public notebook</a>
+  </div>`;
 
-  currentUser = user;
-  isAdmin = true;
-
-  const { data: membership, error: membershipError } = await supabase
-    .from('admin_users')
-    .select('user_id')
-    .eq('user_id', user.id)
-    .maybeSingle();
-
-  if (membershipError || !membership) {
-    app.querySelector('#adminView').innerHTML = `
-      <div class="admin-panel">
-        <h2>Admin access required</h2>
-        <p>This account is not registered as a notebook administrator.</p>
-        <button id="signOut">Sign out</button>
-      </div>`;
-
-    document.querySelector('#signOut').onclick = async () => {
-      await supabase.auth.signOut();
-      location.hash = '';
-    };
-
-    return;
-  }
-
-  const { data: allPages, error } = await supabase
-    .from('notebook_pages')
-    .select('id,page_type,chapter,title,lead,body_html,sort_order,status')
-    .order('sort_order', { ascending: true });
-
-  if (error) {
-    alert(error.message);
-    return;
-  }
-
-  pages = allPages || [];
-
-  const admin = app.querySelector('#adminView');
-  admin.hidden = false;
-  app.querySelector('#publicView').hidden = true;
-
-  admin.innerHTML = `
-    <div class="admin-panel">
-      <div class="admin-heading">
-        <div>
-          <div class="eyebrow">CIPHER CHRONICLES</div>
-          <h2>Notebook administration</h2>
-        </div>
-        <button id="signOut">Sign out</button>
-      </div>
-
-      <div class="admin-actions">
-        <button id="newPage">+ New page</button>
-      </div>
-
-      <div id="pageEditor"></div>
-
-      <h3>Existing pages</h3>
-      <div class="admin-page-list">
-        ${pages.map(p => `
-          <article class="admin-page-row">
-            <div>
-              <h3>${p.page_type === 'blank' ? 'Blank page' : escapeHTML(p.title || 'Untitled page')}</h3>
-              <small>${p.page_type === 'blank' ? 'No chapter content' : p.page_type === 'continuation' ? `Continuation · ${escapeHTML(p.chapter || 'Chapter not assigned')}` : escapeHTML(p.chapter || '')}</small>
-              <span class="status">${escapeHTML(p.status)}</span>
-            </div>
-            <div class="row-actions">
-              <button data-edit="${p.id}">Edit</button>
-              <button data-delete="${p.id}" class="danger">Delete</button>
-            </div>
-          </article>
-        `).join('')}
-      </div>
-    </div>`;
-
-  document.querySelector('#signOut').onclick = async () => {
-    await supabase.auth.signOut();
+  document.querySelector('#backPublic').onclick = e => {
+    e.preventDefault();
     location.hash = '';
   };
 
-  document.querySelector('#newPage').onclick = () => editorForm(null);
+  document.querySelector('#loginForm').onsubmit = async e => {
+    e.preventDefault();
 
-  admin.querySelectorAll('[data-edit]').forEach(button => {
-    button.onclick = () => {
-      const page = pages.find(p => p.id === button.dataset.edit);
-      editorForm(page);
-    };
-  });
+    const fd = new FormData(e.currentTarget);
 
-  admin.querySelectorAll('[data-delete]').forEach(button => {
-    button.onclick = async () => {
-      if (!confirm('Delete this page permanently?')) return;
+    const { error } = await supabase.auth.signInWithPassword({
+      email: fd.get('email'),
+      password: fd.get('password')
+    });
 
-      const { error } = await supabase
-        .from('notebook_pages')
-        .delete()
-        .eq('id', button.dataset.delete);
+    document.querySelector('#loginMessage').textContent =
+      error ? error.message : 'Signed in. Loading your workspace…';
 
-      if (error) alert(error.message);
-      else loadAdmin();
-    };
+    if (!error) {
+      await checkSession();
+
+      if (isAdmin) {
+        showDashboard();
+      } else {
+        document.querySelector('#loginMessage').textContent =
+          'This account is not authorised as a notebook administrator.';
+      }
+    }
+  };
+}
+
+/* Administrator dashboard */
+
+async function showDashboard() {
+  document.querySelector('#publicView').hidden = true;
+
+  const view = document.querySelector('#adminView');
+  view.hidden = false;
+
+  const { data, error } = await supabase
+    .from('notebook_pages')
+    .select('*')
+    .order('sort_order');
+
+  if (error) {
+    view.innerHTML = `<p class="error">${escapeHTML(error.message)}</p>`;
+    return;
+  }
+
+  view.innerHTML = `<div class="admin-heading">
+    <div>
+      <div class="eyebrow">PRIVATE AUTHOR WORKSPACE</div>
+      <h2>Notebook desk</h2>
+      <p>Manage drafts and published chapters.</p>
+    </div>
+
+    <div class="admin-actions">
+      <button id="newPage" class="gold-button">＋ New page</button>
+      <button id="logout" class="quiet">Sign out</button>
+    </div>
+  </div>
+
+  <div class="admin-list">
+    ${(data || []).map(p => `
+      <article class="admin-row">
+        <div>
+          <span class="status-tag ${p.status}">${p.status}</span>
+          <h3>${p.page_type === 'blank' ? 'Blank page' : escapeHTML(p.title || 'Untitled page')}</h3>
+          <small>${p.page_type === 'blank' ? 'No chapter content' : p.page_type === 'continuation' ? `Continuation · ${escapeHTML(p.chapter || 'Chapter not assigned')}` : escapeHTML(p.chapter || '')}</small>
+        </div>
+        <button data-edit="${p.id}" class="quiet">Edit</button>
+      </article>
+    `).join('') || '<p>No pages yet. Create your first page.</p>'}
+  </div>
+
+  <div id="editor"></div>`;
+
+  document.querySelector('#logout').onclick = async () => {
+    await supabase.auth.signOut();
+    isAdmin = false;
+    location.hash = '';
+  };
+
+  document.querySelector('#newPage').onclick = () => editorForm();
+
+  document.querySelectorAll('[data-edit]').forEach(b => {
+    b.onclick = () => editorForm(data.find(p => p.id === b.dataset.edit));
   });
 }
 
-function editorForm(p) {
-  editingId = p?.id || null;
+/* Create and edit notebook pages */
 
-  const pageType = p?.page_type || 'content';
+function editorForm(p = {}) {
+  const target = document.querySelector('#editor');
+  const pageType = p.page_type || 'content';
+  const isBlank = pageType === 'blank';
   const isContinuation = pageType === 'continuation';
 
-  document.querySelector('#pageEditor').innerHTML = `
-    <form id="editorForm" class="editor-form">
-      <h3>${p ? 'Edit page' : 'Create a page'}</h3>
+  target.innerHTML = `<div class="editor-card">
+    <h3>${p.id ? 'Edit page' : 'Create a page'}</h3>
 
+    <form id="pageForm">
       <label>Page type
         <select name="page_type" id="pageType">
           <option value="content" ${pageType === 'content' ? 'selected' : ''}>Chapter page</option>
           <option value="continuation" ${isContinuation ? 'selected' : ''}>Continuation page (same chapter)</option>
-          <option value="blank" ${pageType === 'blank' ? 'selected' : ''}>Blank page</option>
+          <option value="blank" ${isBlank ? 'selected' : ''}>Blank page</option>
         </select>
       </label>
 
-      <div id="chapterField" ${isContinuation || pageType === 'blank' ? 'hidden' : ''}>
-        <label>Chapter name
-          <input name="chapter" value="${escapeHTML(p?.chapter || '')}" placeholder="e.g. Chapter 04 · Digital Signatures">
-        </label>
-      </div>
+      <div id="contentFields" ${isBlank ? 'hidden' : ''}>
+        <div id="chapterField" ${isContinuation ? 'hidden' : ''}>
+          <label>Chapter / section
+            <input name="chapter" value="${escapeHTML(p.chapter || '')}" placeholder="e.g. CHAPTER 01 · FOUNDATIONS">
+          </label>
+        </div>
 
-      <div id="continuationHelp" class="editor-help" ${isContinuation ? '' : 'hidden'}>
-        This page will automatically continue the nearest preceding chapter.
-      </div>
+        <p id="continuationHelp" class="editor-help" ${isContinuation ? '' : 'hidden'}>
+          This page will automatically continue the chapter of the nearest preceding content page. No chapter heading will be printed again.
+        </p>
 
-      <div id="titleField" ${pageType === 'blank' ? 'hidden' : ''}>
-        <label>Page title (optional for continuation pages)
-          <input name="title" value="${escapeHTML(p?.title || '')}" placeholder="Enter a page title">
-        </label>
-      </div>
-
-      <div id="contentFields" ${pageType === 'blank' ? 'hidden' : ''}>
-        <label>Short introduction
-          <textarea name="lead" rows="2">${escapeHTML(p?.lead || '')}</textarea>
+        <label>Page title
+          <input name="title" value="${escapeHTML(p.title || '')}" placeholder="Enter the page title">
         </label>
 
-        <label>Page content (HTML supported)
-          <textarea name="body_html" rows="12">${escapeHTML(p?.body_html || '<p>Start writing here…</p>')}</textarea>
+        <label>Introductory line
+          <input name="lead" value="${escapeHTML(p.lead || '')}">
         </label>
+
+        <label>Article content
+          <textarea name="body_html" rows="12">${escapeHTML(p.body_html || '<p>Write your article here…</p>')}</textarea>
+        </label>
+
+        <p class="editor-help">
+          Content accepts basic HTML such as &lt;p&gt;, &lt;h3&gt;,
+          &lt;ul&gt;, &lt;li&gt;, &lt;strong&gt; and &lt;blockquote&gt;.
+        </p>
       </div>
 
       <label>Publication status
         <select name="status">
-          <option value="draft" ${p?.status === 'draft' ? 'selected' : ''}>Draft</option>
-          <option value="published" ${p?.status === 'published' || !p ? 'selected' : ''}>Published</option>
+          <option value="draft" ${p.status !== 'published' ? 'selected' : ''}>Draft — private</option>
+          <option value="published" ${p.status === 'published' ? 'selected' : ''}>Published — visible to visitors</option>
         </select>
       </label>
 
-      <div class="editor-actions">
-        <button type="submit">Save page</button>
-        <button type="button" id="cancelEdit" class="quiet">Cancel</button>
+      <div class="admin-actions">
+        <button class="gold-button" type="submit">Save page</button>
+        <button type="button" class="quiet" id="cancelEdit">Cancel</button>
+        ${p.id ? '<button type="button" class="danger" id="deletePage">Delete</button>' : ''}
       </div>
 
-      <p id="editorMessage"></p>
-    </form>`;
+      <p id="editorMessage" class="form-message"></p>
+    </form>
+  </div>`;
 
-  const typeSelect = document.querySelector('#pageType');
-
-  typeSelect.addEventListener('change', () => {
-    const type = typeSelect.value;
-    document.querySelector('#chapterField').hidden =
-      type === 'continuation' || type === 'blank';
-    document.querySelector('#continuationHelp').hidden =
-      type !== 'continuation';
-    document.querySelector('#titleField').hidden = type === 'blank';
+  const syncPageTypeFields = type => {
     document.querySelector('#contentFields').hidden = type === 'blank';
-  });
-
-  document.querySelector('#cancelEdit').onclick = () => {
-    document.querySelector('#pageEditor').innerHTML = '';
+    document.querySelector('#chapterField').hidden = type === 'continuation';
+    document.querySelector('#continuationHelp').hidden = type !== 'continuation';
   };
+  document.querySelector('#pageType').onchange = e => syncPageTypeFields(e.target.value);
 
-  document.querySelector('#editorForm').onsubmit = async e => {
+  document.querySelector('#cancelEdit').onclick = () => { target.innerHTML = ''; };
+
+  document.querySelector('#pageForm').onsubmit = async e => {
     e.preventDefault();
-
     const fd = new FormData(e.currentTarget);
     const type = fd.get('page_type');
-
-    let chapter = fd.get('chapter') || null;
+    const sortOrder = p.sort_order ?? Date.now();
+    let chapter = type === 'blank' ? null : (fd.get('chapter') || null);
 
     if (type === 'continuation') {
-      // Inherit chapter from the closest preceding page.
-      const { data: earlierPages, error: earlierError } = await supabase
-        .from('notebook_pages')
-        .select('page_type,chapter,sort_order')
-        .lt('sort_order', p?.sort_order ?? 999999)
-        .order('sort_order', { ascending: false });
-
-      if (earlierError) {
-        document.querySelector('#editorMessage').textContent = earlierError.message;
-        return;
-      }
-
-      chapter = (earlierPages || [])
-        .find(row => row.page_type !== 'blank' && row.chapter)?.chapter || null;
-
+      // For a new continuation, inherit the chapter from the closest earlier
+      // non-blank page. For edits, retain the chapter already assigned.
+      chapter = p.chapter || null;
       if (!chapter) {
-        document.querySelector('#editorMessage').textContent =
-          'Create a chapter page before adding a continuation page.';
+        const { data: earlierPages, error: lookupError } = await supabase
+          .from('notebook_pages')
+          .select('page_type,chapter,sort_order')
+          .lt('sort_order', sortOrder)
+          .order('sort_order', { ascending: false })
+          .limit(100);
+        if (lookupError) {
+          document.querySelector('#editorMessage').textContent = lookupError.message;
+          return;
+        }
+        chapter = (earlierPages || []).find(row => row.page_type !== 'blank' && row.chapter)?.chapter || null;
+      }
+      if (!chapter) {
+        document.querySelector('#editorMessage').textContent = 'There is no earlier chapter to continue. Create a Chapter page first.';
         return;
       }
     }
 
     const payload = {
       page_type: type,
-      chapter: type === 'blank' ? 'PERSONAL NOTES' : chapter,
-      title: type === 'blank'
-        ? 'Untitled page'
-        : type === 'continuation'
-          ? (fd.get('title') || '')
-          : (fd.get('title') || 'Untitled page'),
+      chapter,
+      title: type === 'blank' ? null : (type === 'continuation' ? (fd.get('title') || '') : (fd.get('title') || null)),
       lead: type === 'blank' ? '' : (fd.get('lead') || ''),
-      body_html: type === 'blank' ? '' : (fd.get('body_html') || ''),
+      body_html: type === 'blank' ? '' : DOMPurify.sanitize(fd.get('body_html') || '', { USE_PROFILES: { html: true } }).replace(/<div\b(?=[^>]*data-visual=["']digital-signature["'])[^>]*>\s*<\/div>/gi, ''),
       status: fd.get('status'),
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
+      sort_order: sortOrder
     };
 
-    let result;
+    const result = p.id
+      ? await supabase.from('notebook_pages').update(payload).eq('id', p.id)
+      : await supabase.from('notebook_pages').insert(payload);
 
-    if (editingId) {
-      result = await supabase
-        .from('notebook_pages')
-        .update(payload)
-        .eq('id', editingId);
-    } else {
-      const { data: lastPage } = await supabase
-        .from('notebook_pages')
-        .select('sort_order')
-        .order('sort_order', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      payload.sort_order = (lastPage?.sort_order ?? 0) + 10;
-
-      result = await supabase
-        .from('notebook_pages')
-        .insert(payload);
-    }
-
-    if (result.error) {
-      document.querySelector('#editorMessage').textContent = result.error.message;
-      return;
-    }
-
-    document.querySelector('#editorMessage').textContent = 'Page saved successfully.';
-    await loadAdmin();
+    document.querySelector('#editorMessage').textContent = result.error ? result.error.message : 'Saved successfully.';
+    if (!result.error) setTimeout(showDashboard, 500);
   };
+
+  if (p.id) {
+    document.querySelector('#deletePage').onclick = async () => {
+      if (!confirm('Delete this page permanently?')) return;
+      const result = await supabase.from('notebook_pages').delete().eq('id', p.id);
+      if (result.error) document.querySelector('#editorMessage').textContent = result.error.message;
+      else showDashboard();
+    };
+  }
 }
 
 async function route() {
   if (location.hash === '#admin') {
-    await loadAdmin();
+    if (!configured) {
+      document.querySelector('#publicView').hidden = true;
+
+      const v = document.querySelector('#adminView');
+      v.hidden = false;
+
+      v.innerHTML = `<div class="admin-card">
+        <h2>Setup required</h2>
+        <p>Connect this site to your Supabase project first. Follow the setup guide in README.md.</p>
+      </div>`;
+
+      return;
+    }
+
+    await checkSession();
+
+    if (isAdmin) {
+      await showDashboard();
+    } else {
+      showLogin();
+    }
   } else {
-    const admin = app.querySelector('#adminView');
-    const publicView = app.querySelector('#publicView');
+    document.querySelector('#adminView').hidden = true;
+    document.querySelector('#publicView').hidden = false;
 
-    if (admin) admin.hidden = true;
-    if (publicView) publicView.hidden = false;
+    await loadPublicPages();
 
-    await loadPages();
+    index = -1;
+    draw();
   }
 }
 
 shell();
 route();
-
 window.addEventListener('hashchange', route);
+window.addEventListener('resize', () => {
+  if (location.hash !== '#admin') draw();
+});
