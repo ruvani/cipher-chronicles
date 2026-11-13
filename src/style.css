@@ -378,12 +378,6 @@ button:disabled {
     grid-template-columns: 1fr;
 }
 
-/* During desktop cover opening, reveal the first spread directly.
-   Do not render an extra reverse-side page over the Contents page. */
-.turn-sheet.cover-opening .turn-face.back {
-    visibility: hidden;
-}
-
 .turn-sheet.cover-opening .flip-page {
     width: 100%;
     height: 100%;
@@ -768,3 +762,9 @@ footer {
 .visual-explainer.paused .traveller animateMotion { animation-play-state:paused; }
 @media(max-width:600px) { .visual-explainer { padding:9px; margin:14px 0; } .flow-caption { font-size:10px; } .visual-controls button { padding:7px 8px; font-size:10px; } }
 @media(prefers-reduced-motion:reduce) { .traveller { display:none; } }
+
+
+/* Allow vertical scrolling while recognizing horizontal page swipes on touch screens. */
+@media (max-width: 700px) {
+  #book { touch-action: pan-y; }
+}
