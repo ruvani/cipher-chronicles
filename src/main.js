@@ -180,9 +180,12 @@ function getBookPages() {
       seen.add(label);
       const originalIndex = pages.indexOf(p);
 
-    chapters.push({
-  label: p.chapter || p.title || 'Untitled Chapter',
-  title: p.title || '',
+  const chapterName = (p.chapter || '').trim();
+const pageTitle = (p.title || '').trim();
+
+chapters.push({
+  label: chapterName,
+  title: pageTitle,
   pageNumber: originalIndex + 3,
   pageIndex: originalIndex + 2,
   spread: Math.floor((originalIndex + 2) / 2)
