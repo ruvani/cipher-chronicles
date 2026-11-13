@@ -208,6 +208,9 @@ function turn(dir) {
 
   flipping = true;
 
+  const book = document.querySelector('#book');
+  book.classList.add('is-turning');
+
   front.innerHTML = spreadMarkup(index);
   back.innerHTML = spreadMarkup(target);
 
@@ -225,6 +228,7 @@ function turn(dir) {
   const finishFlip = () => {
     sheet.classList.remove('is-flipping', 'turned-forward', 'turned-backward');
     sheet.style.transform = 'rotateY(0deg)';
+    book.classList.remove('is-turning');
     index = target;
     draw();
     flipping = false;
