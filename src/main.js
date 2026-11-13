@@ -37,6 +37,62 @@ const escapeHTML = (s = '') =>
 const safeBody = html =>
   DOMPurify.sanitize(html || '<p></p>', { USE_PROFILES: { html: true } });
 
+// Replace safe, author-selected visual markers with the built-in animated explainer.
+function renderVisualMarkers(html) {
+  return html.replace(/<div\b(?=[^>]*data-visual=[\"']digital-signature[\"'])[^>]*>\s*<\/div>/gi, digitalSignatureVisualHTML());
+}
+
+function digitalSignatureVisualHTML() {
+  return `<section class="visual-explainer" data-visual-widget="digital-signature" aria-label="Animated digital signature process">
+    <div class="visual-heading"><span>INTERACTIVE VISUAL</span><h3>How a Digital Signature Works</h3></div>
+    <svg class="signature-flow" viewBox="0 0 680 250" role="img" aria-label="Alice's message is hashed, signed with her private key, sent to Bob and verified with her public key">
+      <defs><marker id="sigArrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#987344"/></marker></defs>
+      <path class="flow-line" d="M112 88 H210 M278 88 H376 M444 88 H542" marker-end="url(#sigArrow)"/>
+      <g class="flow-node node-alice"><rect x="12" y="42" width="100" height="92" rx="10"/><circle cx="62" cy="68" r="13"/><path d="M38 112 Q62 78 86 112"/><text x="62" y="153">Alice</text></g>
+      <g class="flow-node node-hash"><rect x="210" y="42" width="68" height="92" rx="10"/><text x="244" y="81" class="node-icon">#</text><text x="244" y="153">SHA-256</text></g>
+      <g class="flow-node node-sign"><rect x="376" y="42" width="68" height="92" rx="10"/><path d="M398 84 l22 -22 12 12 -22 22 -14 4z"/><text x="410" y="153">Sign</text></g>
+      <g class="flow-node node-bob"><rect x="542" y="42" width="126" height="92" rx="10"/><circle cx="605" cy="68" r="13"/><path d="M580 112 Q605 78 630 112"/><text x="605" y="153">Bob verifies</text></g>
+      <circle class="traveller traveller-one" r="7" cy="88"><animateMotion dur="5s" repeatCount="indefinite" path="M112 88 H542"/></circle>
+      <circle class="traveller traveller-two" r="4" cy="88"><animateMotion dur="5s" begin=".6s" repeatCount="indefinite" path="M112 88 H542"/></circle>
+      <text class="flow-caption" x="340" y="207" text-anchor="middle">Message → Hash → Private-key signature → Public-key verification</text>
+    </svg>
+    <div class="visual-step" aria-live="polite"><strong data-visual-step-title>1. Create the message</strong><span data-visual-step-text>Alice prepares the message she wants to send to Bob.</span></div>
+    <div class="visual-controls"><button type="button" data-visual-prev disabled>← Previous</button><button type="button" class="visual-play" data-visual-play>Pause animation</button><button type="button" data-visual-next>Next step →</button><button type="button" data-visual-replay>Replay</button></div>
+  </section>`;
+}
+
+function wireVisualExplainers() {
+  const steps = [
+    ['1. Create the message', 'Alice prepares the original message. The message itself is not encrypted by the digital-signature operation.'],
+    ['2. Calculate the hash', 'SHA-256 computes a fixed-length digest from the message. A changed message produces a different digest.'],
+    ['3. Sign with the private key', 'Alice uses her private signing key to create a digital signature for the message.'],
+    ['4. Send the message and signature', 'Alice sends Bob the original message, the signature and a trusted copy of her public key.'],
+    ['5. Verify with the public key', 'Bob uses Alice’s public key to verify the signature against the received message.']
+  ];
+  document.querySelectorAll('[data-visual-widget="digital-signature"]').forEach(widget => {
+    if (widget.dataset.wired) return;
+    widget.dataset.wired = 'true';
+    let current = 0, timer = null, playing = true;
+    const title = widget.querySelector('[data-visual-step-title]');
+    const text = widget.querySelector('[data-visual-step-text]');
+    const prev = widget.querySelector('[data-visual-prev]');
+    const next = widget.querySelector('[data-visual-next]');
+    const play = widget.querySelector('[data-visual-play]');
+    const render = () => {
+      title.textContent = steps[current][0]; text.textContent = steps[current][1];
+      prev.disabled = current === 0; next.disabled = current === steps.length - 1;
+      widget.dataset.step = String(current + 1);
+    };
+    const stop = () => { if (timer) clearInterval(timer); timer = null; playing = false; play.textContent = 'Play animation'; widget.classList.add('paused'); };
+    const start = () => { if (timer) clearInterval(timer); playing = true; play.textContent = 'Pause animation'; widget.classList.remove('paused'); timer = setInterval(() => { if (current < steps.length - 1) { current++; render(); } else stop(); }, 3600); };
+    prev.addEventListener('click', () => { stop(); current = Math.max(0, current - 1); render(); });
+    next.addEventListener('click', () => { stop(); current = Math.min(steps.length - 1, current + 1); render(); });
+    play.addEventListener('click', () => playing ? stop() : start());
+    widget.querySelector('[data-visual-replay]').addEventListener('click', () => { current = 0; render(); start(); });
+    render(); start();
+  });
+}
+
 const coverHTML = () => `<div class="cover-content">
   <div class="cover-top">
     <span class="eyebrow">A FIELD JOURNAL OF DIGITAL SECRETS</span>
@@ -170,7 +226,7 @@ function pageMarkup(p, number) {
     <h2>${escapeHTML(p.title)}</h2>
     <div class="short-rule"></div>
     ${p.lead ? `<p class="lead">${escapeHTML(p.lead)}</p>` : ''}
-    <div class="article-body">${safeBody(p.body_html)}</div>
+    <div class="article-body">${renderVisualMarkers(safeBody(p.body_html))}</div>
     <div class="folio">${String(number).padStart(2, '0')}</div>
   </div>`;
 }
@@ -238,8 +294,9 @@ function draw() {
       draw();
       document.querySelector('.book-stage')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     };
-  });
+  });  wireVisualExplainers();
 }
+
 
 /* Page-turn animation: animate the complete two-page spread */
 
@@ -497,6 +554,13 @@ function editorForm(p = {}) {
           <textarea name="body_html" rows="12">${escapeHTML(p.body_html || '<p>Write your article here…</p>')}</textarea>
         </label>
 
+        <label>Interactive visual
+          <select name="visual_type">
+            <option value="none" ${!String(p.body_html || '').includes('data-visual="digital-signature"') ? 'selected' : ''}>No animated diagram</option>
+            <option value="digital-signature" ${String(p.body_html || '').includes('data-visual="digital-signature"') ? 'selected' : ''}>Digital Signature — animated flow</option>
+          </select>
+        </label>
+
         <p class="editor-help">
           Content accepts basic HTML such as &lt;p&gt;, &lt;h3&gt;,
           &lt;ul&gt;, &lt;li&gt;, &lt;strong&gt; and &lt;blockquote&gt;.
@@ -536,7 +600,7 @@ function editorForm(p = {}) {
       chapter: type === 'blank' ? null : (fd.get('chapter') || null),
       title: type === 'blank' ? null : (fd.get('title') || null),
       lead: type === 'blank' ? '' : (fd.get('lead') || ''),
-      body_html: type === 'blank' ? '' : DOMPurify.sanitize(fd.get('body_html') || '', { USE_PROFILES: { html: true } }),
+      body_html: type === 'blank' ? '' : (() => { const clean = DOMPurify.sanitize(fd.get('body_html') || '', { USE_PROFILES: { html: true } }).replace(/<div\b(?=[^>]*data-visual=[\"']digital-signature[\"'])[^>]*>\s*<\/div>/gi, ''); return fd.get('visual_type') === 'digital-signature' ? clean + '<div data-visual="digital-signature"></div>' : clean; })(),
       status: fd.get('status'),
       updated_at: new Date().toISOString(),
       sort_order: p.sort_order ?? Date.now()
