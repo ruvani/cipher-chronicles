@@ -274,7 +274,7 @@ function draw() {
     right.innerHTML = pageMarkup(bookPages[rightIndex], rightIndex + 1);
 
     counter.textContent = `SPREAD ${index + 1} / ${Math.ceil(bookPages.length / 2)}`;
-    prev.disabled = index <= 0;
+    prev.disabled = index < 0;
     next.disabled = rightIndex >= bookPages.length - 1;
   }
 
