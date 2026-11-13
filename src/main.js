@@ -209,10 +209,20 @@ function turn(dir) {
   flipping = true;
 
   const book = document.querySelector('#book');
+  const openingCover = index === -1 && dir > 0;
   book.classList.add('is-turning');
 
-  front.innerHTML = spreadMarkup(index);
-  back.innerHTML = spreadMarkup(target);
+  // The front cover is a single right-hand leaf, not a complete two-page spread.
+  // Turn only that leaf so it does not appear again on the reverse of a full spread.
+  if (openingCover) {
+    sheet.classList.add('cover-opening');
+    front.innerHTML = `<div class="flip-page flip-right cover-leaf">${coverHTML()}</div>`;
+    back.innerHTML = `<div class="flip-page flip-left cover-reveal">${pages[0] ? pageMarkup(pages[0], 1) : ''}</div>`;
+  } else {
+    sheet.classList.remove('cover-opening');
+    front.innerHTML = spreadMarkup(index);
+    back.innerHTML = spreadMarkup(target);
+  }
 
   sheet.classList.remove('is-flipping', 'turned-forward', 'turned-backward');
   sheet.style.transform = 'rotateY(0deg)';
@@ -226,7 +236,7 @@ function turn(dir) {
   });
 
   const finishFlip = () => {
-    sheet.classList.remove('is-flipping', 'turned-forward', 'turned-backward');
+    sheet.classList.remove('is-flipping', 'turned-forward', 'turned-backward', 'cover-opening');
     sheet.style.transform = 'rotateY(0deg)';
     book.classList.remove('is-turning');
     index = target;
