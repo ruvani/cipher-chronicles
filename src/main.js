@@ -75,27 +75,7 @@ function draw() {
 let flipping=false;
 function turn(dir){
  
-let flipping = false;
 
-function turn(dir) {
-  if (flipping) return;
-
-  const max = Math.max(0, Math.ceil(pages.length / 2) - 1);
-  const target = Math.max(-1, Math.min(max, index + dir));
-
-  
-let flipping = false;
-
-function turn(dir) {
-let flipping = false;
-
-function turn(dir) {
-  if (flipping) return;
-
-  const max = Math.max(0, Math.ceil(pages.length / 2) - 1);
-  const target = Math.max(-1, Math.min(max, index + dir));
-
-  
 let flipping = false;
 
 function turn(dir) {
@@ -137,6 +117,7 @@ function turn(dir) {
     flipping = false;
   }, 850);
 }
+
 async function loadPublicPages(){
   if(!configured){pages=starter;return;}
   const {data,error}=await supabase.from('notebook_pages').select('id,chapter,title,lead,body_html,sort_order').eq('status','published').order('sort_order');
