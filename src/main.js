@@ -159,6 +159,39 @@ function shell() {
     else if (e.clientX < r.left + r.width * 0.22) turn(-1);
   });
 
+  // Mobile horizontal swipe navigation. Vertical movement remains available for scrolling.
+  const bookSurface = document.querySelector('#book');
+  let swipeStartX = 0;
+  let swipeStartY = 0;
+  let swipeTarget = null;
+
+  bookSurface.addEventListener('touchstart', e => {
+    if (!mobileBook() || editMode || e.touches.length !== 1) {
+      swipeTarget = null;
+      return;
+    }
+    if (e.target.closest('a, button, input, textarea, select, [data-no-page-swipe]')) {
+      swipeTarget = null;
+      return;
+    }
+    swipeTarget = e.target;
+    swipeStartX = e.touches[0].clientX;
+    swipeStartY = e.touches[0].clientY;
+  }, { passive: true });
+
+  bookSurface.addEventListener('touchend', e => {
+    if (!mobileBook() || swipeTarget === null || e.changedTouches.length !== 1) return;
+    const dx = e.changedTouches[0].clientX - swipeStartX;
+    const dy = e.changedTouches[0].clientY - swipeStartY;
+    swipeTarget = null;
+
+    // Require a deliberate horizontal gesture; ignore taps and vertical scrolling.
+    if (Math.abs(dx) < 55 || Math.abs(dx) < Math.abs(dy) * 1.25) return;
+    turn(dx < 0 ? 1 : -1);
+  }, { passive: true });
+
+  bookSurface.addEventListener('touchcancel', () => { swipeTarget = null; }, { passive: true });
+
   document.addEventListener('keydown', e => {
     if (
       location.hash === '#admin' ||
@@ -367,10 +400,7 @@ function turn(dir) {
     document.querySelector('#leftPaper').innerHTML = pageMarkup(bookPages[0], 1);
     document.querySelector('#rightPaper').innerHTML = pageMarkup(bookPages[1], 2);
     front.innerHTML = `<div class="flip-page flip-right cover-leaf">${coverHTML()}</div>`;
-    // The cover's reverse face is intentionally transparent during opening.
-    // This lets the first spread (blank verso + Contents on the right) show
-    // directly underneath instead of presenting another intermediate leaf.
-    back.innerHTML = '';
+    back.innerHTML = `<div class="flip-page flip-left cover-reveal">${pageMarkup(bookPages[0], 1)}</div>`;
   } else {
     sheet.classList.remove('cover-opening');
     front.innerHTML = spreadMarkup(index);
