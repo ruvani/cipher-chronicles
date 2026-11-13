@@ -684,3 +684,7 @@ footer {
         margin-top: 15px
     }
 }
+/* Intentional blank notebook pages retain the paper texture without content. */
+.blank-page {
+    min-height: 100%;
+}
