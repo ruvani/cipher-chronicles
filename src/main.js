@@ -134,6 +134,23 @@ function pageMarkup(p, number) {
   </div>`;
 }
 
+function spreadMarkup(spreadIndex) {
+  if (spreadIndex < 0) {
+    return `<div class="flip-page flip-left"></div>
+      <div class="flip-page flip-right">${coverHTML()}</div>`;
+  }
+
+  const leftPage = pages[spreadIndex * 2];
+  const rightPage = pages[spreadIndex * 2 + 1];
+
+  return `<div class="flip-page flip-left">
+      ${leftPage ? pageMarkup(leftPage, spreadIndex * 2 + 1) : ''}
+    </div>
+    <div class="flip-page flip-right">
+      ${rightPage ? pageMarkup(rightPage, spreadIndex * 2 + 2) : pageMarkup(null)}
+    </div>`;
+}
+
 function draw() {
   const left = index < 0 ? null : pages[index * 2];
   const right = index < 0 ? null : pages[index * 2 + 1];
@@ -171,49 +188,49 @@ function draw() {
   });
 }
 
-/* Page-turn animation */
+/* Page-turn animation: animate the complete two-page spread */
 
 let flipping = false;
 
 function turn(dir) {
   if (flipping) return;
 
-  const max = Math.max(0, Math.ceil(pages.length / 2) - 1);
-  const target = Math.max(-1, Math.min(max, index + dir));
+  const maxSpread = Math.max(0, Math.ceil(pages.length / 2) - 1);
+  const target = Math.max(-1, Math.min(maxSpread, index + dir));
 
   if (target === index) return;
 
+  const sheet = document.querySelector('#turnSheet');
+  const front = document.querySelector('#turnFront');
+  const back = document.querySelector('#turnBack');
+
+  if (!sheet || !front || !back) return;
+
   flipping = true;
 
-  const oldRight = index < 0 ? null : pages[index * 2 + 1];
-  const newLeft = target < 0 ? null : pages[target * 2];
+  front.innerHTML = spreadMarkup(index);
+  back.innerHTML = spreadMarkup(target);
 
-  document.querySelector('#turnFront').innerHTML =
-    oldRight ? pageMarkup(oldRight, index * 2 + 2) : coverHTML();
-
-  document.querySelector('#turnBack').innerHTML =
-    newLeft ? pageMarkup(newLeft, target * 2 + 1) : coverHTML();
-
-  const sheet = document.querySelector('#turnSheet');
-
-  sheet.classList.remove('turned');
+  sheet.classList.remove('is-flipping', 'turned-forward', 'turned-backward');
+  sheet.style.transform = 'rotateY(0deg)';
   sheet.classList.add('is-flipping');
 
+  // Force the browser to apply the initial state before starting the flip.
+  void sheet.offsetWidth;
+
   requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      sheet.classList.add('turned');
-    });
+    sheet.classList.add(dir > 0 ? 'turned-forward' : 'turned-backward');
   });
 
-  setTimeout(() => {
-    sheet.classList.remove('is-flipping');
-    sheet.classList.remove('turned');
-
+  const finishFlip = () => {
+    sheet.classList.remove('is-flipping', 'turned-forward', 'turned-backward');
+    sheet.style.transform = 'rotateY(0deg)';
     index = target;
     draw();
-
     flipping = false;
-  }, 850);
+  };
+
+  window.setTimeout(finishFlip, 900);
 }
 
 /* Load published notebook pages */
