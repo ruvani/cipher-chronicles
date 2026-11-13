@@ -151,7 +151,7 @@ function shell() {
   document.querySelector('#next').onclick = () => turn(1);
 
   document.querySelector('#book').addEventListener('click', e => {
-    if (editMode) return;
+    if (editMode || e.target.closest('a, button, input, textarea, select')) return;
 
     const r = e.currentTarget.getBoundingClientRect();
 
@@ -184,6 +184,7 @@ function getBookPages() {
         label,
         title: p.title || label,
         pageNumber: originalIndex + 3,
+        pageIndex: originalIndex + 2,
         spread: Math.floor((originalIndex + 2) / 2)
       });
     }
@@ -205,7 +206,7 @@ function pageMarkup(p, number) {
       <div class="chapter-label">CIPHER CHRONICLES</div>
       <h2>Contents</h2>
       <div class="short-rule"></div>
-      <div class="toc-entries">${p.chapters.map((c, i) => `<button class="toc-entry" data-toc-spread="${c.spread}"><span class="toc-number">${String(i + 1).padStart(2, '0')}</span><span class="toc-name">${escapeHTML(c.label)}</span><span class="toc-dots"></span><span class="toc-page-number">${c.pageNumber}</span></button>`).join('')}</div>
+      <div class="toc-entries">${p.chapters.map((c, i) => `<button class="toc-entry" data-toc-spread="${c.spread}" data-toc-page-index="${c.pageIndex}"><span class="toc-number">${String(i + 1).padStart(2, '0')}</span><span class="toc-name">${escapeHTML(c.label)}</span><span class="toc-dots"></span><span class="toc-page-number">${c.pageNumber}</span></button>`).join('')}</div>
       <div class="folio">01</div>
     </div>`;
   }
@@ -249,113 +250,136 @@ function spreadMarkup(spreadIndex) {
     </div>`;
 }
 
+let lastMobileMode = window.matchMedia('(max-width: 700px)').matches;
+
 function draw() {
   const bookPages = getBookPages();
-  const left = index < 0 ? null : bookPages[index * 2];
-  const right = index < 0 ? null : bookPages[index * 2 + 1];
+  const mobile = mobileBook();
+  if (mobile !== lastMobileMode) {
+    if (index >= 0) index = mobile ? index * 2 : Math.floor(index / 2);
+    lastMobileMode = mobile;
+  }
 
-  document.querySelector('#leftPaper').innerHTML =
-    index < 0 ? '' : pageMarkup(left, index * 2 + 1);
+  if (mobile) {
+    const current = index < 0 ? null : bookPages[index];
+    document.querySelector('#leftPaper').innerHTML = '';
+    document.querySelector('#rightPaper').innerHTML =
+      index < 0 ? coverHTML() : pageMarkup(current, index + 1);
+    document.querySelector('#pageCounter').textContent =
+      index < 0 ? 'THE COVER' : `PAGE ${index + 1} / ${bookPages.length}`;
+    document.querySelector('#prev').disabled = index < 0;
+    document.querySelector('#next').disabled = index >= bookPages.length - 1;
+  } else {
+    const left = index < 0 ? null : bookPages[index * 2];
+    const right = index < 0 ? null : bookPages[index * 2 + 1];
+    document.querySelector('#leftPaper').innerHTML =
+      index < 0 ? '' : pageMarkup(left, index * 2 + 1);
+    document.querySelector('#rightPaper').innerHTML =
+      index < 0 ? coverHTML() : pageMarkup(right, index * 2 + 2);
+    const count = Math.max(1, Math.ceil(bookPages.length / 2));
+    document.querySelector('#pageCounter').textContent =
+      index < 0 ? 'THE COVER' : `SPREAD ${index + 1} / ${count}`;
+    document.querySelector('#prev').disabled = index < 0;
+    document.querySelector('#next').disabled = index >= count - 1;
+  }
 
-  document.querySelector('#rightPaper').innerHTML =
-    index < 0 ? coverHTML() : pageMarkup(right, index * 2 + 2);
-
-  const count = Math.max(1, Math.ceil(bookPages.length / 2));
-
-  document.querySelector('#pageCounter').textContent =
-    index < 0 ? 'THE COVER' : `SPREAD ${index + 1} / ${count}`;
-
-  document.querySelector('#prev').disabled = index < 0;
-  document.querySelector('#next').disabled = index >= count - 1;
-
-  const btns = pages
-    .map((p, i) => ({ p, i }))
+  const btns = pages.map((p, i) => ({ p, i }))
     .filter(({ p }) => p.page_type !== 'blank' && p.title)
     .map(({ p, i }) => {
       const spread = Math.floor((i + 2) / 2);
-      return `<button data-spread="${spread}">${escapeHTML(
-        p.chapter || p.title || `Page ${i + 1}`
-      )}</button>`;
-    })
-    .join('');
+      const pageIndex = i + 2;
+      return `<button data-spread="${spread}" data-page-index="${pageIndex}">${escapeHTML(p.chapter || p.title || `Page ${i + 1}`)}</button>`;
+    }).join('');
 
   document.querySelector('#chapterButtons').innerHTML = btns;
-
   document.querySelectorAll('#chapterButtons button').forEach(b => {
     b.onclick = () => {
-      index = Number(b.dataset.spread);
+      index = mobileBook() ? Number(b.dataset.pageIndex) : Number(b.dataset.spread);
       draw();
     };
   });
 
   document.querySelectorAll('[data-toc-spread]').forEach(b => {
     b.onclick = () => {
-      index = Number(b.dataset.tocSpread);
+      index = mobileBook() ? Number(b.dataset.tocPageIndex) : Number(b.dataset.tocSpread);
       draw();
       document.querySelector('.book-stage')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     };
-  });  wireVisualExplainers();
+  });
+  wireVisualExplainers();
 }
-
 
 /* Page-turn animation: animate the complete two-page spread */
 
 let flipping = false;
+const mobileBook = () => window.matchMedia('(max-width: 700px)').matches;
 
 function turn(dir) {
   if (flipping) return;
-
-  const maxSpread = Math.max(0, Math.ceil(getBookPages().length / 2) - 1);
-  const target = Math.max(-1, Math.min(maxSpread, index + dir));
-
-  if (target === index) return;
-
+  const bookPages = getBookPages();
   const sheet = document.querySelector('#turnSheet');
   const front = document.querySelector('#turnFront');
   const back = document.querySelector('#turnBack');
-
+  const book = document.querySelector('#book');
   if (!sheet || !front || !back) return;
 
-  flipping = true;
+  // On narrow screens, turn one physical page at a time so no left-hand pages are skipped.
+  if (mobileBook()) {
+    const target = Math.max(-1, Math.min(bookPages.length - 1, index + dir));
+    if (target === index) return;
+    flipping = true;
+    book.classList.add('is-turning');
+    front.innerHTML = index < 0
+      ? `<div class="flip-page flip-right cover-leaf">${coverHTML()}</div>`
+      : `<div class="flip-page flip-right">${pageMarkup(bookPages[index], index + 1)}</div>`;
+    back.innerHTML = target < 0
+      ? `<div class="flip-page flip-right cover-leaf">${coverHTML()}</div>`
+      : `<div class="flip-page flip-right">${pageMarkup(bookPages[target], target + 1)}</div>`;
+    sheet.classList.remove('cover-opening', 'is-flipping', 'turned-forward', 'turned-backward');
+    sheet.style.transform = 'rotateY(0deg)';
+    sheet.classList.add('is-flipping');
+    void sheet.offsetWidth;
+    requestAnimationFrame(() => sheet.classList.add(dir > 0 ? 'turned-forward' : 'turned-backward'));
+    window.setTimeout(() => {
+      sheet.classList.remove('is-flipping', 'turned-forward', 'turned-backward');
+      sheet.style.transform = 'rotateY(0deg)';
+      book.classList.remove('is-turning');
+      index = target;
+      draw();
+      flipping = false;
+    }, 900);
+    return;
+  }
 
-  const book = document.querySelector('#book');
+  const maxSpread = Math.max(0, Math.ceil(bookPages.length / 2) - 1);
+  const target = Math.max(-1, Math.min(maxSpread, index + dir));
+  if (target === index) return;
+  flipping = true;
   const openingCover = index === -1 && dir > 0;
   book.classList.add('is-turning');
 
-  // The front cover is a single right-hand leaf, not a complete two-page spread.
-  // Turn only that leaf so it does not appear again on the reverse of a full spread.
   if (openingCover) {
     sheet.classList.add('cover-opening');
     front.innerHTML = `<div class="flip-page flip-right cover-leaf">${coverHTML()}</div>`;
-    const firstBookSpread = getBookPages();
-    back.innerHTML = `<div class="flip-page flip-left cover-reveal">${pageMarkup(firstBookSpread[0], 1)}</div>`;
+    back.innerHTML = `<div class="flip-page flip-left cover-reveal">${pageMarkup(bookPages[0], 1)}</div>`;
   } else {
     sheet.classList.remove('cover-opening');
     front.innerHTML = spreadMarkup(index);
     back.innerHTML = spreadMarkup(target);
   }
-
   sheet.classList.remove('is-flipping', 'turned-forward', 'turned-backward');
   sheet.style.transform = 'rotateY(0deg)';
   sheet.classList.add('is-flipping');
-
-  // Force the browser to apply the initial state before starting the flip.
   void sheet.offsetWidth;
-
-  requestAnimationFrame(() => {
-    sheet.classList.add(dir > 0 ? 'turned-forward' : 'turned-backward');
-  });
-
-  const finishFlip = () => {
+  requestAnimationFrame(() => sheet.classList.add(dir > 0 ? 'turned-forward' : 'turned-backward'));
+  window.setTimeout(() => {
     sheet.classList.remove('is-flipping', 'turned-forward', 'turned-backward', 'cover-opening');
     sheet.style.transform = 'rotateY(0deg)';
     book.classList.remove('is-turning');
     index = target;
     draw();
     flipping = false;
-  };
-
-  window.setTimeout(finishFlip, 900);
+  }, 900);
 }
 
 /* Load published notebook pages */
@@ -663,3 +687,6 @@ async function route() {
 shell();
 route();
 window.addEventListener('hashchange', route);
+window.addEventListener('resize', () => {
+  if (location.hash !== '#admin') draw();
+});
