@@ -367,7 +367,10 @@ function turn(dir) {
     document.querySelector('#leftPaper').innerHTML = pageMarkup(bookPages[0], 1);
     document.querySelector('#rightPaper').innerHTML = pageMarkup(bookPages[1], 2);
     front.innerHTML = `<div class="flip-page flip-right cover-leaf">${coverHTML()}</div>`;
-    back.innerHTML = `<div class="flip-page flip-left cover-reveal">${pageMarkup(bookPages[0], 1)}</div>`;
+    // The cover's reverse face is intentionally transparent during opening.
+    // This lets the first spread (blank verso + Contents on the right) show
+    // directly underneath instead of presenting another intermediate leaf.
+    back.innerHTML = '';
   } else {
     sheet.classList.remove('cover-opening');
     front.innerHTML = spreadMarkup(index);
