@@ -83,6 +83,15 @@ function turn(dir) {
   const max = Math.max(0, Math.ceil(pages.length / 2) - 1);
   const target = Math.max(-1, Math.min(max, index + dir));
 
+  
+let flipping = false;
+
+function turn(dir) {
+  if (flipping) return;
+
+  const max = Math.max(0, Math.ceil(pages.length / 2) - 1);
+  const target = Math.max(-1, Math.min(max, index + dir));
+
   if (target === index) return;
 
   flipping = true;
@@ -108,7 +117,6 @@ function turn(dir) {
   });
 
   setTimeout(() => {
-    // Hide the sheet before resetting its rotation.
     sheet.classList.remove('is-flipping');
     sheet.classList.remove('turned');
 
@@ -116,8 +124,6 @@ function turn(dir) {
     draw();
     flipping = false;
   }, 850);
-}
-
 }
 
 async function loadPublicPages(){
