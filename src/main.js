@@ -366,6 +366,7 @@ function turn(dir) {
     sheet.className = 'turn-sheet';
     sheet.classList.add(dir > 0 ? 'turn-next' : 'turn-prev');
 
+    index = nextIndex;
     draw();
     return;
   }
@@ -400,7 +401,7 @@ function turn(dir) {
 
   sheet.className = 'turn-sheet';
   sheet.classList.add(dir > 0 ? 'turn-next' : 'turn-prev');
-
+  index = nextIndex;
   draw();
 }
 
