@@ -37,9 +37,10 @@ const escapeHTML = (s = '') =>
 const safeBody = html =>
   DOMPurify.sanitize(html || '<p></p>', { USE_PROFILES: { html: true } });
 
-// Replace safe, author-selected visual markers with the built-in animated explainer.
+// Remove the built-in interactive digital-signature diagram marker.
+// Article text and separately embedded GIF animations remain untouched.
 function renderVisualMarkers(html) {
-  return html.replace(/<div\b(?=[^>]*data-visual=[\"']digital-signature[\"'])[^>]*>\s*<\/div>/gi, digitalSignatureVisualHTML());
+  return html.replace(/<div\b(?=[^>]*data-visual=[\"']digital-signature[\"'])[^>]*>\s*<\/div>/gi, '');
 }
 
 function digitalSignatureVisualHTML() {
@@ -617,12 +618,6 @@ function editorForm(p = {}) {
           <textarea name="body_html" rows="12">${escapeHTML(p.body_html || '<p>Write your article here…</p>')}</textarea>
         </label>
 
-        <label>Interactive visual
-          <select name="visual_type">
-            <option value="none" ${!String(p.body_html || '').includes('data-visual="digital-signature"') ? 'selected' : ''}>No animated diagram</option>
-            <option value="digital-signature" ${String(p.body_html || '').includes('data-visual="digital-signature"') ? 'selected' : ''}>Digital Signature — animated flow</option>
-          </select>
-        </label>
 
         <p class="editor-help">
           Content accepts basic HTML such as &lt;p&gt;, &lt;h3&gt;,
@@ -663,7 +658,7 @@ function editorForm(p = {}) {
       chapter: type === 'blank' ? null : (fd.get('chapter') || null),
       title: type === 'blank' ? null : (fd.get('title') || null),
       lead: type === 'blank' ? '' : (fd.get('lead') || ''),
-      body_html: type === 'blank' ? '' : (() => { const clean = DOMPurify.sanitize(fd.get('body_html') || '', { USE_PROFILES: { html: true } }).replace(/<div\b(?=[^>]*data-visual=[\"']digital-signature[\"'])[^>]*>\s*<\/div>/gi, ''); return fd.get('visual_type') === 'digital-signature' ? clean + '<div data-visual="digital-signature"></div>' : clean; })(),
+      body_html: type === 'blank' ? '' : DOMPurify.sanitize(fd.get('body_html') || '', { USE_PROFILES: { html: true } }).replace(/<div\b(?=[^>]*data-visual=[\"']digital-signature[\"'])[^>]*>\s*<\/div>/gi, ''),
       status: fd.get('status'),
       updated_at: new Date().toISOString(),
       sort_order: p.sort_order ?? Date.now()
