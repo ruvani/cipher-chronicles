@@ -74,19 +74,50 @@ function draw() {
 }
 let flipping=false;
 function turn(dir){
-  if(flipping)return;
-  const max=Math.max(0,Math.ceil(pages.length/2)-1), target=Math.max(-1,Math.min(max,index+dir));
-  if(target===index)return;
-  flipping=true;
-  const oldRight=index<0?null:pages[index*2+1];
-  const newRight=target<0?null:pages[target*2+1];
-  const oldLeft=index<0?null:pages[index*2];
-  const newLeft=target<0?null:pages[target*2];
-  document.querySelector('#turnFront').innerHTML=oldRight?pageMarkup(oldRight,index*2+2):coverHTML();
-  document.querySelector('#turnBack').innerHTML=newLeft?pageMarkup(newLeft,target*2+1):coverHTML();
-  const sheet=document.querySelector('#turnSheet'); sheet.classList.remove('turned');
-  requestAnimationFrame(()=>requestAnimationFrame(()=>sheet.classList.add('turned')));
-  setTimeout(()=>{index=target;sheet.classList.remove('turned');draw();flipping=false;},850);
+ 
+let flipping = false;
+
+function turn(dir) {
+  if (flipping) return;
+
+  const max = Math.max(0, Math.ceil(pages.length / 2) - 1);
+  const target = Math.max(-1, Math.min(max, index + dir));
+
+  if (target === index) return;
+
+  flipping = true;
+
+  const oldRight = index < 0 ? null : pages[index * 2 + 1];
+  const newLeft = target < 0 ? null : pages[target * 2];
+
+  document.querySelector('#turnFront').innerHTML =
+    oldRight ? pageMarkup(oldRight, index * 2 + 2) : coverHTML();
+
+  document.querySelector('#turnBack').innerHTML =
+    newLeft ? pageMarkup(newLeft, target * 2 + 1) : coverHTML();
+
+  const sheet = document.querySelector('#turnSheet');
+
+  sheet.classList.remove('turned');
+  sheet.classList.add('is-flipping');
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      sheet.classList.add('turned');
+    });
+  });
+
+  setTimeout(() => {
+    // Hide the sheet before resetting its rotation.
+    sheet.classList.remove('is-flipping');
+    sheet.classList.remove('turned');
+
+    index = target;
+    draw();
+    flipping = false;
+  }, 850);
+}
+
 }
 
 async function loadPublicPages(){
