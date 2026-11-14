@@ -216,7 +216,7 @@ function getBookPages() {
       const originalIndex = pages.indexOf(p);
       chapters.push({
         label,
-        title: p.title || label,
+        title: (p.title || '').trim(),
         pageNumber: originalIndex + 3,
         pageIndex: originalIndex + 2,
         spread: Math.floor((originalIndex + 2) / 2)
@@ -240,8 +240,8 @@ function pageMarkup(p, number) {
       <div class="chapter-label">CIPHER CHRONICLES</div>
       <h2>Contents</h2>
       <div class="short-rule"></div>
-      <div class="toc-entries">${p.chapters.map((c, i) => `<button class="toc-entry" data-toc-spread="${c.spread}" data-toc-page-index="${c.pageIndex}"><span class="toc-number">${String(i + 1).padStart(2, '0')}</span><span class="toc-name">${escapeHTML(c.label)}</span><span class="toc-dots"></span><span class="toc-page-number">${c.pageNumber}</span></button>`).join('')}</div>
-      <div class="folio">01</div>
+      <div class="toc-entries">${p.chapters.map((c, i) => `<button class="toc-entry" data-toc-spread="${c.spread}" data-toc-page-index="${c.pageIndex}"><span class="toc-number">${String(i + 1).padStart(2, '0')}</span><span class="toc-name">${escapeHTML(c.label)}</span><span class="toc-title">${escapeHTML(c.title || '')}</span><span class="toc-dots"></span><span class="toc-page-number">${String(c.pageNumber).padStart(2, '0')}</span></button>`).join('')}</div>
+      <div class="folio">${String(number).padStart(2, '0')}</div>
     </div>`;
   }
   if (p && p.page_type === 'blank') {
@@ -392,15 +392,12 @@ function turn(dir) {
   book.classList.add('is-turning');
 
   if (openingCover) {
-    // Desktop: place the first real spread underneath the turning cover.
-    // The left page is the intentional blank verso; the right page is Contents.
-    // Keep this change desktop-only so the already-working mobile turn is untouched.
+    // Desktop cover: keep the static paper hidden while the single cover leaf
+    // turns. The inside of that leaf reveals the Contents page; draw() then
+    // renders the normal blank-left / Contents-right spread after the turn.
     sheet.classList.add('cover-opening');
-    book.classList.add('is-cover-opening');
-    document.querySelector('#leftPaper').innerHTML = pageMarkup(bookPages[0], 1);
-    document.querySelector('#rightPaper').innerHTML = pageMarkup(bookPages[1], 2);
     front.innerHTML = `<div class="flip-page flip-right cover-leaf">${coverHTML()}</div>`;
-    back.innerHTML = `<div class="flip-page flip-left cover-reveal">${pageMarkup(bookPages[0], 1)}</div>`;
+    back.innerHTML = `<div class="flip-page flip-right cover-reveal">${pageMarkup(bookPages[1], 2)}</div>`;
   } else {
     sheet.classList.remove('cover-opening');
     front.innerHTML = spreadMarkup(index);
