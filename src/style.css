@@ -412,7 +412,10 @@ button:disabled {
 .turn-face.back {
     transform: rotateY(180deg);
 }
-
+/* Hide the reverse side of the front cover during opening */
+.turn-sheet.cover-opening .turn-face.back {
+    visibility: hidden;
+}
 .turn-face:after {
     display: none;
 }
