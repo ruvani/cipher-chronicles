@@ -391,14 +391,11 @@ function turn(dir) {
   const openingCover = index === -1 && dir > 0;
   book.classList.add('is-turning');
 
-  if (openingCover) {
-    // Desktop cover: keep the static paper hidden while the single cover leaf
-    // turns. The inside of that leaf reveals the Contents page; draw() then
-    // renders the normal blank-left / Contents-right spread after the turn.
+ if (openingCover) {
     sheet.classList.add('cover-opening');
     front.innerHTML = `<div class="flip-page flip-right cover-leaf">${coverHTML()}</div>`;
-    back.innerHTML = `<div class="flip-page flip-right cover-reveal">${pageMarkup(bookPages[1], 2)}</div>`;
-  } else {
+    back.innerHTML = '';
+} else {
     sheet.classList.remove('cover-opening');
     front.innerHTML = spreadMarkup(index);
     back.innerHTML = spreadMarkup(target);
