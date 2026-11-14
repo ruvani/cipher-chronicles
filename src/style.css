@@ -768,3 +768,42 @@ footer {
 @media (max-width: 700px) {
   #book { touch-action: pan-y; }
 }
+
+
+/* Contents entries: show chapter label and the article title separately. */
+.toc-entry {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+.toc-number {
+    flex: 0 0 auto;
+}
+.toc-name {
+    flex: 0 0 auto;
+    color: #8b6a40;
+    font: 11px 'Special Elite', monospace;
+    letter-spacing: .02em;
+}
+.toc-title {
+    flex: 0 1 auto;
+    color: #493727;
+    font: 600 16px 'Cormorant Garamond', serif;
+    text-align: left;
+}
+.toc-dots {
+    flex: 1 1 auto;
+}
+.toc-page-number {
+    flex: 0 0 auto;
+}
+.turn-sheet.cover-opening .cover-reveal {
+    border-radius: 0 7px 7px 0;
+    border-left: 1px solid #bda77e;
+    border-right: 0;
+}
+@media (max-width: 700px) {
+    .toc-entry { gap: 5px; flex-wrap: wrap; }
+    .toc-name { font-size: 9px; }
+    .toc-title { font-size: 14px; }
+}
