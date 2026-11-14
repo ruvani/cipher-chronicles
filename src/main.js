@@ -205,9 +205,7 @@ function shell() {
 }
 
 function getBookPages() {
-  const contentPages = pages.filter(p =>
-    p.page_type !== 'blank' && p.page_type !== 'continuation' && p.title
-  );
+  const contentPages = pages.filter(p => p.page_type !== 'blank' && p.title);
   const chapters = [];
   const seen = new Set();
 
@@ -215,50 +213,23 @@ function getBookPages() {
     const label = (p.chapter || p.title || 'Untitled chapter').trim();
     if (!seen.has(label)) {
       seen.add(label);
+      const originalIndex = pages.indexOf(p);
       chapters.push({
         label,
         title: p.title || label,
-        originalIndex: pages.indexOf(p)
+        pageNumber: originalIndex + 3,
+        pageIndex: originalIndex + 2,
+        spread: Math.floor((originalIndex + 2) / 2)
       });
     }
   });
 
+  // Reserve the first left-hand page as a blank verso so the contents
+  // appears on the first right-hand page, like a printed book.
   if (!chapters.length) return [...pages];
-
-  // Keep five entries on each Contents page. Add more Contents pages
-  // automatically when the notebook grows beyond that capacity.
-  const entriesPerContentsPage = 5;
-  const contentsPageCount = Math.ceil(chapters.length / entriesPerContentsPage);
-  const contentsPages = [];
-
-  for (let page = 0; page < contentsPageCount; page++) {
-    const pageIndex = page + 1; // index 0 is the intentional blank verso
-    const pageChapters = chapters.slice(
-      page * entriesPerContentsPage,
-      (page + 1) * entriesPerContentsPage
-    ).map(chapter => {
-      // Authored pages begin after the blank page and all Contents pages.
-      const bookPageIndex = contentsPageCount + 1 + chapter.originalIndex;
-      return {
-        ...chapter,
-        pageIndex: bookPageIndex,
-        pageNumber: bookPageIndex + 1,
-        spread: Math.floor(bookPageIndex / 2)
-      };
-    });
-
-    contentsPages.push({
-      page_type: 'toc',
-      chapters: pageChapters,
-      contentsPageNumber: page + 1,
-      _system: true
-    });
-  }
-
-  // The first Contents page remains on the right-hand side after the blank verso.
   return [
     { page_type: 'blank', _system: true },
-    ...contentsPages,
+    { page_type: 'toc', chapters, _system: true },
     ...pages
   ];
 }
@@ -270,7 +241,7 @@ function pageMarkup(p, number) {
       <h2>Contents</h2>
       <div class="short-rule"></div>
       <div class="toc-entries">${p.chapters.map((c, i) => `<button class="toc-entry" data-toc-spread="${c.spread}" data-toc-page-index="${c.pageIndex}"><span class="toc-number">${String(i + 1).padStart(2, '0')}</span><span class="toc-name">${escapeHTML(c.label)}</span><span class="toc-dots"></span><span class="toc-page-number">${c.pageNumber}</span></button>`).join('')}</div>
-      <div class="folio">${String(p.contentsPageNumber || 1).padStart(2, '0')}</div>
+      <div class="folio">01</div>
     </div>`;
   }
   if (p && p.page_type === 'blank') {
