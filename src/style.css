@@ -636,6 +636,55 @@ footer {
     text-align: center
 }
 
+
+/* Responsive book mode: portrait uses one page; landscape uses a two-page spread. */
+.book.single-page-mode {
+    height: min(610px, 78vh);
+    min-height: 480px;
+}
+
+.book.single-page-mode .left-paper {
+    display: none;
+}
+
+.book.single-page-mode .right-paper {
+    width: 100%;
+    left: 0;
+    right: auto;
+    border-radius: 7px;
+    border-left: 0;
+}
+
+.book.single-page-mode:before {
+    display: none;
+}
+
+.book.single-page-mode .turn-sheet {
+    inset: 0;
+    width: 100%;
+}
+
+.book.single-page-mode .turn-face {
+    grid-template-columns: 1fr;
+}
+
+.book.single-page-mode .turn-face .flip-left {
+    display: none;
+}
+
+.book.single-page-mode .turn-face .flip-right {
+    border-radius: 7px;
+    border-left: 0;
+}
+
+/* Keep the single-page layout comfortable on narrow portrait tablets too. */
+@media (orientation: portrait) and (max-width: 1024px) {
+    .book.single-page-mode {
+        height: min(680px, 78vh);
+        min-height: 480px;
+    }
+}
+
 @media(max-width:700px) {
     .book {
         height: 610px;
