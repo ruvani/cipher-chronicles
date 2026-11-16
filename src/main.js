@@ -285,10 +285,31 @@ function paginateNotebookPages() {
     }
 
     const parsed = new DOMParser().parseFromString(`<div>${safeBody(source.body_html)}</div>`, 'text/html');
-    const nodes = [...parsed.body.firstElementChild.children];
-    if (!nodes.length) {
+    const rawNodes = [...parsed.body.firstElementChild.children];
+    if (!rawNodes.length) {
       output.push(source);
       continue;
+    }
+
+    // Treat a heading and the next content block as one pagination unit.
+    // This prevents section headings from being stranded at the bottom of a page.
+    // An explicit <div class="page-break"></div> starts a new virtual page.
+    const units = [];
+    for (let i = 0; i < rawNodes.length; i++) {
+      const node = rawNodes[i];
+      if (node.matches('.page-break, [data-page-break="true"]')) {
+        units.push({ pageBreak: true });
+        continue;
+      }
+      if (/^H[1-6]$/.test(node.tagName)) {
+        const next = rawNodes[i + 1];
+        if (next && !next.matches('.page-break, [data-page-break="true"]')) {
+          units.push({ nodes: [node, next] });
+          i++;
+          continue;
+        }
+      }
+      units.push({ nodes: [node] });
     }
 
     let current = [];
@@ -307,17 +328,35 @@ function paginateNotebookPages() {
       current = [];
     };
 
-    for (const node of nodes) {
-      const candidate = [...current, node];
-      if (fits(source, candidate.map(n => n.outerHTML).join(''))) {
-        current.push(node);
+    for (const unit of units) {
+      if (unit.pageBreak) {
+        pushPage();
+        continue;
+      }
+
+      const unitNodes = unit.nodes;
+      const unitHTML = unitNodes.map(n => n.outerHTML).join('');
+      const candidateHTML = [...current.map(n => n.outerHTML), unitHTML].join('');
+      if (fits(source, candidateHTML)) {
+        current.push(...unitNodes);
         continue;
       }
 
       if (current.length) pushPage();
 
-      if (fits(source, node.outerHTML)) {
-        current.push(node);
+      // Keep heading + following block together whenever they fit on a fresh page.
+      if (fits(source, unitHTML)) {
+        current.push(...unitNodes);
+        continue;
+      }
+
+      // A heading pair may be taller than a page only when the following block
+      // itself is unusually large. In that case, keep the heading with its block
+      // rather than placing the heading alone at the bottom of the previous page.
+      const node = unitNodes[0];
+      if (unitNodes.length > 1) {
+        current.push(...unitNodes);
+        pushPage();
         continue;
       }
 
@@ -332,12 +371,12 @@ function paginateNotebookPages() {
         }
       } else if (node.tagName === 'UL' || node.tagName === 'OL') {
         // Keep list semantics and split long lists between list items.
-        let listItems = [...node.children];
+        const listItems = [...node.children];
         let listChunk = [];
         for (const item of listItems) {
           const listHTML = `<${node.tagName.toLowerCase()}>${[...listChunk.map(x => x.outerHTML), item.outerHTML].join('')}</${node.tagName.toLowerCase()}>`;
-          const candidateHTML = [...current.map(n => n.outerHTML), listHTML].join('');
-          if (listChunk.length && !fits(source, candidateHTML)) {
+          const candidateListHTML = [...current.map(n => n.outerHTML), listHTML].join('');
+          if (listChunk.length && !fits(source, candidateListHTML)) {
             const wrapper = document.createElement('div'); wrapper.innerHTML = `<${node.tagName.toLowerCase()}>${listChunk.map(x => x.outerHTML).join('')}</${node.tagName.toLowerCase()}>`;
             current.push(wrapper.firstElementChild); pushPage(); listChunk = [item];
           } else listChunk.push(item);
@@ -347,7 +386,7 @@ function paginateNotebookPages() {
           current.push(wrapper.firstElementChild);
         }
       } else {
-        // Keep an indivisible illustration, callout or heading together.
+        // Keep an indivisible illustration, callout or other block together.
         current.push(node);
       }
     }
