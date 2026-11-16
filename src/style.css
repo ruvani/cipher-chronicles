@@ -136,7 +136,8 @@ button:disabled {
     top: 0;
     width: 50%;
     height: 100%;
-    padding: clamp(24px, 4vw, 54px) clamp(24px, 4vw, 58px);
+    /* Desktop pages use a little less outer padding so the text fills the paper. */
+    padding: 40px 42px;
     overflow: hidden;
     color: var(--ink);
     background: radial-gradient(ellipse at 20% 15%, #fff7df88, transparent 45%), repeating-linear-gradient(0deg, #8d70400a 0px, #8d70400a 1px, transparent 1px, transparent 5px), linear-gradient(110deg, var(--paper), #f7edda 48%, var(--paper2));
@@ -203,6 +204,8 @@ button:disabled {
     color: #493d31;
     overflow: hidden;
     min-height: 0;
+    /* Match the desktop pagination measuring width; avoids overly short lines. */
+    max-width: 380px;
 }
 
 .article-body p {
