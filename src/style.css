@@ -201,7 +201,8 @@ button:disabled {
 .article-body {
     font: clamp(.88rem, 1.25vw, 1rem)/1.62 'IM Fell English', Georgia, serif;
     color: #493d31;
-    overflow: auto
+    overflow: hidden;
+    min-height: 0;
 }
 
 .article-body p {
@@ -216,8 +217,14 @@ button:disabled {
 
 .article-body ul,
 .article-body ol {
-    padding-left: 20px
+    padding-left: 22px;
+    margin: 8px 0 12px;
+    list-style-position: outside;
 }
+
+.article-body ul { list-style-type: disc; }
+.article-body ol { list-style-type: decimal; }
+.article-body li { display: list-item; }
 
 .article-body li {
     margin: 5px 0
@@ -739,25 +746,6 @@ footer {
     border-bottom: 1px dotted #a88e67;
     transform: translateY(-3px);
 }
-
-.article-body ul {
-    list-style-type: disc;
-    padding-left: 25px;
-    margin: 10px 0 15px;
-}
-
-.article-body ol {
-    list-style-type: decimal;
-    padding-left: 25px;
-    margin: 10px 0 15px;
-}
-
-.article-body li {
-    display: list-item;
-    margin: 7px 0;
-    line-height: 1.6;
-}
-
 .toc-page-number { min-width: 18px; text-align: right; }
 
 /* Interactive animated process-flow diagrams */
