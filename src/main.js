@@ -247,10 +247,11 @@ function paginateNotebookPages() {
     return;
   }
 
-  const styles = getComputedStyle(rightPaper);
+  // Use one stable portrait-page reference size on every device. This keeps
+  // virtual page boundaries identical when the reader rotates or resizes a screen.
   const measure = document.createElement('article');
   measure.className = 'paper right-paper pagination-measure';
-  measure.style.cssText = `position:fixed;left:-10000px;top:0;right:auto;display:block;visibility:hidden;pointer-events:none;width:${rightPaper.clientWidth}px;height:${book.clientHeight}px;padding:${styles.padding};border:0;`;
+  measure.style.cssText = 'position:fixed;left:-10000px;top:0;right:auto;display:block;visibility:hidden;pointer-events:none;width:360px;height:610px;padding:23px 20px;border:0;';
   document.body.appendChild(measure);
 
   const fits = (source, html) => {
@@ -446,11 +447,17 @@ function spreadMarkup(spreadIndex) {
     </div>`;
 }
 
-let lastMobileMode = window.matchMedia('(max-width: 700px)').matches;
+// Portrait phones/tablets use one page; landscape devices use a spread when each page has enough room.
+const singlePageMode = () =>
+  window.matchMedia('(max-width: 760px)').matches ||
+  window.matchMedia('(orientation: portrait) and (max-width: 1024px)').matches;
+
+let lastMobileMode = singlePageMode();
 
 function draw() {
   const bookPages = getBookPages();
-  const mobile = mobileBook();
+  const mobile = singlePageMode();
+  document.querySelector('#book')?.classList.toggle('single-page-mode', mobile);
   if (mobile !== lastMobileMode) {
     if (index >= 0) index = mobile ? index * 2 : Math.floor(index / 2);
     lastMobileMode = mobile;
@@ -491,14 +498,14 @@ function draw() {
   document.querySelector('#chapterButtons').innerHTML = btns;
   document.querySelectorAll('#chapterButtons button').forEach(b => {
     b.onclick = () => {
-      index = mobileBook() ? Number(b.dataset.pageIndex) : Number(b.dataset.spread);
+      index = singlePageMode() ? Number(b.dataset.pageIndex) : Number(b.dataset.spread);
       draw();
     };
   });
 
   document.querySelectorAll('[data-toc-spread]').forEach(b => {
     b.onclick = () => {
-      index = mobileBook() ? Number(b.dataset.tocPageIndex) : Number(b.dataset.tocSpread);
+      index = singlePageMode() ? Number(b.dataset.tocPageIndex) : Number(b.dataset.tocSpread);
       draw();
       document.querySelector('.book-stage')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     };
@@ -509,7 +516,7 @@ function draw() {
 /* Page-turn animation: animate the complete two-page spread */
 
 let flipping = false;
-const mobileBook = () => window.matchMedia('(max-width: 700px)').matches;
+const mobileBook = singlePageMode;
 
 function turn(dir) {
   if (flipping) return;
@@ -922,16 +929,18 @@ shell();
 route();
 window.addEventListener('hashchange', route);
 
-let paginationResizeTimer = null;
+let layoutResizeTimer = null;
 window.addEventListener('resize', () => {
   if (location.hash === '#admin' || !pages.length) return;
-  clearTimeout(paginationResizeTimer);
-  paginationResizeTimer = setTimeout(async () => {
-    const oldIndex = index;
-    await document.fonts?.ready;
-    paginateNotebookPages();
+  clearTimeout(layoutResizeTimer);
+  layoutResizeTimer = setTimeout(() => {
+    // Do not paginate again on resize: the same logical pages must survive
+    // portrait/landscape changes. draw() only changes how those pages are shown.
     const total = getBookPages().length;
-    index = Math.min(oldIndex, mobileBook() ? total - 1 : Math.ceil(total / 2) - 1);
+    const maxIndex = singlePageMode()
+      ? total - 1
+      : Math.max(0, Math.ceil(total / 2) - 1);
+    index = Math.min(index, maxIndex);
     draw();
-  }, 180);
+  }, 120);
 });
