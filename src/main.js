@@ -127,6 +127,11 @@ function shell() {
       <div class="navline">
         <button id="prev" class="quiet">← Previous</button>
         <span id="pageCounter">COVER</span>
+        <label class="page-jump-label" for="pageJump">Go to
+          <select id="pageJump" aria-label="Jump directly to a book page">
+            <option value="" selected>Page…</option>
+          </select>
+        </label>
         <button id="next" class="quiet">Next →</button>
       </div>
       <section class="book-stage">
@@ -509,6 +514,29 @@ function draw() {
       index < 0 ? 'THE COVER' : `SPREAD ${index + 1} / ${count}`;
     document.querySelector('#prev').disabled = index < 0;
     document.querySelector('#next').disabled = index >= count - 1;
+  }
+
+  // Build the direct page navigator from the final logical pages, including
+  // automatically generated continuation pages. Values are physical page indexes.
+  const pageJump = document.querySelector('#pageJump');
+  if (pageJump) {
+    const options = ['<option value="" selected>Page…</option>'];
+    bookPages.forEach((p, pageIndex) => {
+      if (!p || p.page_type === 'blank') return;
+      const pageNumber = pageIndex + 1;
+      let label = p.page_type === 'toc' ? 'Contents' : (p.title || p.chapter || 'Untitled page');
+      if (p.page_type === 'continuation') label = `${p.chapter || 'Chapter'} – continued`;
+      options.push(`<option value="${pageIndex}">${String(pageNumber).padStart(2, '0')} · ${escapeHTML(label)}</option>`);
+    });
+    pageJump.innerHTML = options.join('');
+    pageJump.value = '';
+    pageJump.onchange = () => {
+      if (pageJump.value === '') return;
+      const physicalPageIndex = Number(pageJump.value);
+      index = singlePageMode() ? physicalPageIndex : Math.floor(physicalPageIndex / 2);
+      draw();
+      document.querySelector('.book-stage')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    };
   }
 
   const navigationPages = renderedPages || pages;
