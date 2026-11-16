@@ -310,6 +310,25 @@ function paginateNotebookPages() {
           continue;
         }
       }
+
+      // Keep an illustration with the first explanatory block that follows it.
+      // Without this pairing, an image can occupy the top of a page while its
+      // caption/callout or explanation is pushed to the next page, leaving a
+      // visually unbalanced spread. If the pair cannot fit in the current page,
+      // the normal fit check moves the pair together to a fresh page.
+      if (node.matches('figure.chapter-illustration')) {
+        const next = rawNodes[i + 1];
+        if (next && !next.matches('.page-break, [data-page-break="true"]')) {
+          if (/^H[1-6]$/.test(next.tagName) && rawNodes[i + 2] && !rawNodes[i + 2].matches('.page-break, [data-page-break="true"]')) {
+            units.push({ nodes: [node, next, rawNodes[i + 2]] });
+            i += 2;
+            continue;
+          }
+          units.push({ nodes: [node, next] });
+          i++;
+          continue;
+        }
+      }
       units.push({ nodes: [node] });
     }
 
