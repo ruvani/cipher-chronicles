@@ -133,6 +133,7 @@ function shell() {
           </select>
         </label>
         <button id="next" class="quiet">Next →</button>
+        <button id="printBook" class="print-book-button" type="button" title="Print the textbook or save it as a PDF">Print / Save PDF</button>
       </div>
       <section class="book-stage">
         <div class="book" id="book">
@@ -156,6 +157,7 @@ function shell() {
 
   document.querySelector('#prev').onclick = () => turn(-1);
   document.querySelector('#next').onclick = () => turn(1);
+  document.querySelector('#printBook').onclick = printBook;
 
   document.querySelector('#book').addEventListener('click', e => {
     if (editMode || e.target.closest('a, button, input, textarea, select')) return;
@@ -208,6 +210,139 @@ function shell() {
     if (e.key === 'ArrowRight') turn(1);
     if (e.key === 'ArrowLeft') turn(-1);
   });
+}
+
+function printBook() {
+  if (!pages.length) {
+    window.alert('The book content is still loading. Please try again in a moment.');
+    return;
+  }
+
+  // Use the original published records, not the digital reader's virtual pages.
+  // This creates a flowing textbook layout rather than printing screenshots of
+  // the page-flipping interface or preserving its artificial page breaks.
+  const printable = pages.filter(p => p.page_type !== 'blank' && p.page_type !== 'toc');
+  const chapterGroups = [];
+  const chapterKeys = new Map();
+
+  printable.forEach((p, i) => {
+    const chapterLabel = String(p.chapter || p.title || 'General').trim();
+    const key = chapterLabel.toLowerCase();
+    let group = chapterKeys.get(key);
+    if (!group) {
+      group = { label: chapterLabel, pages: [], id: `chapter-${chapterGroups.length + 1}` };
+      chapterKeys.set(key, group);
+      chapterGroups.push(group);
+    }
+    group.pages.push(p);
+  });
+
+  const contents = chapterGroups.map(group =>
+    `<li><a href="#${group.id}">${escapeHTML(group.label)}</a></li>`
+  ).join('');
+
+  const chapterHTML = chapterGroups.map(group => {
+    const first = group.pages[0];
+    const firstIsContinuation = first.page_type === 'continuation';
+    const heading = !firstIsContinuation && first.title
+      ? `<h1>${escapeHTML(first.title)}</h1>`
+      : `<h1>${escapeHTML(group.label)}</h1>`;
+    const lead = !firstIsContinuation && first.lead
+      ? `<p class="print-lead">${escapeHTML(first.lead)}</p>` : '';
+
+    const body = group.pages.map((p, pageIndex) => {
+      const title = pageIndex > 0 && p.page_type !== 'continuation' && p.title
+        ? `<h2>${escapeHTML(p.title)}</h2>` : '';
+      const leadText = pageIndex > 0 && p.page_type !== 'continuation' && p.lead
+        ? `<p class="print-lead">${escapeHTML(p.lead)}</p>` : '';
+      const clean = renderVisualMarkers(safeBody(p.body_html || ''))
+        .replace(/<div\s+class=["']page-break["']\s*>\s*<\/div>/gi, '');
+      return `${title}${leadText}<div class="print-article">${clean}</div>`;
+    }).join('');
+
+    return `<section class="print-chapter" id="${group.id}">
+      <div class="print-chapter-label">${escapeHTML(group.label)}</div>
+      ${heading}${lead}${body}
+    </section>`;
+  }).join('');
+
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    window.alert('Your browser blocked the print window. Please allow pop-ups for this site and try again.');
+    return;
+  }
+
+  const documentHTML = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cipher Chronicles – Printable Edition</title>
+<base href="${escapeHTML(location.origin)}/">
+<style>
+  @page { size: A4; margin: 19mm 18mm 20mm; }
+  * { box-sizing: border-box; }
+  html { color: #29231f; background: #fff; }
+  body { margin: 0; color: #29231f; font: 11pt/1.58 Georgia, 'Times New Roman', serif; }
+  .print-cover { min-height: 245mm; display: flex; flex-direction: column; justify-content: center; text-align: center; page-break-after: always; break-after: page; }
+  .print-kicker, .print-chapter-label { color: #8c693b; font: 9pt Georgia, serif; letter-spacing: .16em; text-transform: uppercase; }
+  .print-cover h1 { margin: 18mm 0 5mm; font: 700 34pt/1.08 Georgia, serif; letter-spacing: .08em; }
+  .print-cover .subtitle { color: #735b3d; font-style: italic; font-size: 14pt; }
+  .print-cover .rule { width: 32mm; border-top: 2px solid #b58a4a; margin: 10mm auto; }
+  .print-contents { page-break-after: always; break-after: page; }
+  .print-contents h1 { font-size: 23pt; border-bottom: 1px solid #b58a4a; padding-bottom: 4mm; }
+  .print-contents li { margin: 3mm 0; }
+  .print-contents a { color: inherit; text-decoration: none; }
+  .print-chapter { page-break-before: always; break-before: page; }
+  .print-chapter:first-of-type { page-break-before: auto; break-before: auto; }
+  .print-chapter-label { margin-bottom: 4mm; }
+  h1 { font: 700 25pt/1.15 Georgia, serif; margin: 0 0 5mm; color: #33271e; }
+  h2 { font: 700 18pt/1.2 Georgia, serif; margin: 8mm 0 3mm; color: #493727; break-after: avoid; page-break-after: avoid; }
+  h3, h4 { color: #493727; break-after: avoid; page-break-after: avoid; }
+  h3 { font: 700 14pt/1.25 Georgia, serif; margin: 7mm 0 2mm; }
+  p { margin: 0 0 4mm; orphans: 3; widows: 3; }
+  .print-lead { color: #70583a; font-style: italic; font-size: 12pt; margin-bottom: 7mm; }
+  ul, ol { padding-left: 7mm; margin: 2mm 0 5mm; }
+  li { margin: 1.5mm 0; }
+  blockquote { margin: 6mm 0; padding: 2mm 0 2mm 5mm; border-left: 2px solid #b58a4a; color: #70583a; font-style: italic; }
+  aside { display: block; margin: 5mm 0; padding: 4mm 5mm; border: 1px solid #c6ad83; background: #f8f3e9; break-inside: avoid; }
+  figure { margin: 6mm auto; text-align: center; break-inside: avoid; page-break-inside: avoid; }
+  figure img, .print-article img { display: block; max-width: 100%; max-height: 115mm; width: auto; height: auto; margin: 0 auto; object-fit: contain; }
+  figcaption { margin-top: 2mm; color: #806344; font-size: 9pt; font-style: italic; }
+  table { width: 100%; border-collapse: collapse; margin: 5mm 0; font-size: 10pt; }
+  th, td { border: 1px solid #c9b99d; padding: 2mm; text-align: left; }
+  .visual-controls, .visual-step, .turn-hint { display: none !important; }
+  .visual-explainer { border: 1px solid #c9b99d; padding: 4mm; margin: 5mm 0; break-inside: avoid; }
+  .visual-explainer svg { max-width: 100%; height: auto; }
+  .print-footer { margin-top: 12mm; padding-top: 3mm; border-top: 1px solid #d4c5a9; color: #8c785b; font-size: 8pt; text-align: center; }
+  @media screen { body { max-width: 210mm; margin: 12mm auto; padding: 18mm; box-shadow: 0 2px 20px #0002; } .print-cover { min-height: 240mm; } }
+</style>
+</head>
+<body>
+  <header class="print-cover">
+    <div class="print-kicker">A Field Journal of Digital Secrets</div>
+    <h1>CIPHER<br>CHRONICLES</h1>
+    <div class="rule"></div>
+    <p class="subtitle">A journey into the world of information security</p>
+    <p>THE FOUNDATIONS OF INFORMATION SECURITY</p>
+  </header>
+  <nav class="print-contents"><h1>Contents</h1><ol>${contents}</ol></nav>
+  <main>${chapterHTML}</main>
+  <div class="print-footer">CIPHER CHRONICLES · A JOURNEY INTO THE WORLD OF INFORMATION SECURITY</div>
+<script>
+  window.addEventListener('load', () => {
+    const images = Array.from(document.images);
+    Promise.all(images.map(img => img.complete ? Promise.resolve() : new Promise(resolve => { img.onload = resolve; img.onerror = resolve; })))
+      .then(() => setTimeout(() => window.print(), 350));
+  });
+  window.addEventListener('afterprint', () => window.close());
+<\/script>
+</body>
+</html>`;
+
+  printWindow.document.open();
+  printWindow.document.write(documentHTML);
+  printWindow.document.close();
 }
 
 function getBookPages() {
