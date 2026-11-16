@@ -17,6 +17,7 @@ const starter = [
 ];
 
 let pages = [];
+let renderedPages = null;
 let index = -1;
 let isAdmin = false;
 let currentUser = null;
@@ -205,7 +206,8 @@ function shell() {
 }
 
 function getBookPages() {
-  const contentPages = pages.filter(p => p.page_type !== 'blank' && p.title);
+  const sourcePages = renderedPages || pages;
+  const contentPages = sourcePages.filter(p => p.page_type !== 'blank' && p.title && !p._autoContinuation);
   const chapters = [];
   const seen = new Set();
 
@@ -213,7 +215,7 @@ function getBookPages() {
     const label = (p.chapter || p.title || 'Untitled chapter').trim();
     if (!seen.has(label)) {
       seen.add(label);
-      const originalIndex = pages.indexOf(p);
+      const originalIndex = sourcePages.indexOf(p);
       chapters.push({
         label,
         title: (p.title || '').trim(),
@@ -226,12 +228,134 @@ function getBookPages() {
 
   // Reserve the first left-hand page as a blank verso so the contents
   // appears on the first right-hand page, like a printed book.
-  if (!chapters.length) return [...pages];
+  if (!chapters.length) return [...sourcePages];
   return [
     { page_type: 'blank', _system: true },
     { page_type: 'toc', chapters, _system: true },
-    ...pages
+    ...sourcePages
   ];
+}
+
+// Measure article content against the actual printable area and split it into
+// virtual pages. These pages exist only in the reader; Supabase records remain
+// unchanged and authors do not need to create continuation records manually.
+function paginateNotebookPages() {
+  const book = document.querySelector('#book');
+  const rightPaper = document.querySelector('#rightPaper');
+  if (!book || !rightPaper || !pages.length) {
+    renderedPages = [...pages];
+    return;
+  }
+
+  const styles = getComputedStyle(rightPaper);
+  const measure = document.createElement('article');
+  measure.className = 'paper right-paper pagination-measure';
+  measure.style.cssText = `position:fixed;left:-10000px;top:0;right:auto;display:block;visibility:hidden;pointer-events:none;width:${rightPaper.clientWidth}px;height:${book.clientHeight}px;padding:${styles.padding};border:0;`;
+  document.body.appendChild(measure);
+
+  const fits = (source, html) => {
+    const testPage = { ...source, body_html: html };
+    measure.innerHTML = pageMarkup(testPage, 1);
+    const inner = measure.querySelector('.page-inner');
+    const body = inner?.querySelector('.article-body');
+    return !!inner && inner.scrollHeight <= inner.clientHeight + 1 && (!body || body.scrollHeight <= body.clientHeight + 1);
+  };
+
+  const splitLongParagraph = (node, source, prefixNodes) => {
+    const words = (node.textContent || '').trim().split(/\s+/);
+    if (words.length < 2) return [node.outerHTML];
+    const output = [];
+    let current = [];
+    for (const word of words) {
+      const candidate = [...prefixNodes.map(n => n.outerHTML), `<p>${escapeHTML([...current, word].join(' '))}</p>`].join('');
+      if (current.length && !fits(source, candidate)) {
+        output.push(`<p>${escapeHTML(current.join(' '))}</p>`);
+        current = [word];
+      } else current.push(word);
+    }
+    if (current.length) output.push(`<p>${escapeHTML(current.join(' '))}</p>`);
+    return output;
+  };
+
+  const output = [];
+  for (const source of pages) {
+    if (source.page_type === 'blank' || !source.body_html) {
+      output.push(source);
+      continue;
+    }
+
+    const parsed = new DOMParser().parseFromString(`<div>${safeBody(source.body_html)}</div>`, 'text/html');
+    const nodes = [...parsed.body.firstElementChild.children];
+    if (!nodes.length) {
+      output.push(source);
+      continue;
+    }
+
+    let current = [];
+    let pageNumber = 0;
+    const pushPage = () => {
+      if (!current.length) return;
+      output.push(pageNumber === 0 ? { ...source, body_html: current.map(n => n.outerHTML).join('') } : {
+        ...source,
+        page_type: 'continuation',
+        title: '',
+        lead: '',
+        body_html: current.map(n => n.outerHTML).join(''),
+        _autoContinuation: true
+      });
+      pageNumber++;
+      current = [];
+    };
+
+    for (const node of nodes) {
+      const candidate = [...current, node];
+      if (fits(source, candidate.map(n => n.outerHTML).join(''))) {
+        current.push(node);
+        continue;
+      }
+
+      if (current.length) pushPage();
+
+      if (fits(source, node.outerHTML)) {
+        current.push(node);
+        continue;
+      }
+
+      // Long paragraphs are split at word boundaries instead of being clipped.
+      if (node.tagName === 'P') {
+        const pieces = splitLongParagraph(node, source, []);
+        for (const piece of pieces) {
+          if (current.length && !fits(source, [...current.map(n => n.outerHTML), piece].join(''))) pushPage();
+          const wrapper = document.createElement('div');
+          wrapper.innerHTML = piece;
+          if (wrapper.firstElementChild) current.push(wrapper.firstElementChild);
+        }
+      } else if (node.tagName === 'UL' || node.tagName === 'OL') {
+        // Keep list semantics and split long lists between list items.
+        let listItems = [...node.children];
+        let listChunk = [];
+        for (const item of listItems) {
+          const listHTML = `<${node.tagName.toLowerCase()}>${[...listChunk.map(x => x.outerHTML), item.outerHTML].join('')}</${node.tagName.toLowerCase()}>`;
+          const candidateHTML = [...current.map(n => n.outerHTML), listHTML].join('');
+          if (listChunk.length && !fits(source, candidateHTML)) {
+            const wrapper = document.createElement('div'); wrapper.innerHTML = `<${node.tagName.toLowerCase()}>${listChunk.map(x => x.outerHTML).join('')}</${node.tagName.toLowerCase()}>`;
+            current.push(wrapper.firstElementChild); pushPage(); listChunk = [item];
+          } else listChunk.push(item);
+        }
+        if (listChunk.length) {
+          const wrapper = document.createElement('div'); wrapper.innerHTML = `<${node.tagName.toLowerCase()}>${listChunk.map(x => x.outerHTML).join('')}</${node.tagName.toLowerCase()}>`;
+          current.push(wrapper.firstElementChild);
+        }
+      } else {
+        // Keep an indivisible illustration, callout or heading together.
+        current.push(node);
+      }
+    }
+    pushPage();
+  }
+
+  renderedPages = output;
+  measure.remove();
 }
 
 function pageMarkup(p, number) {
@@ -316,7 +440,8 @@ function draw() {
     document.querySelector('#next').disabled = index >= count - 1;
   }
 
-  const btns = pages.map((p, i) => ({ p, i }))
+  const navigationPages = renderedPages || pages;
+  const btns = navigationPages.map((p, i) => ({ p, i }))
     .filter(({ p }) => p.page_type !== 'blank' && p.page_type !== 'continuation' && p.title)
     .map(({ p, i }) => {
       const spread = Math.floor((i + 2) / 2);
@@ -420,6 +545,9 @@ function turn(dir) {
 async function loadPublicPages() {
   if (!configured) {
     pages = starter;
+    renderedPages = null;
+    await document.fonts?.ready;
+    paginateNotebookPages();
     return;
   }
 
@@ -432,10 +560,16 @@ async function loadPublicPages() {
   if (error) {
     console.error(error);
     pages = starter;
+    renderedPages = null;
+    await document.fonts?.ready;
+    paginateNotebookPages();
     return;
   }
 
   pages = data?.length ? data : starter;
+  renderedPages = null;
+  await document.fonts?.ready;
+  paginateNotebookPages();
 }
 
 /* Check administrator session */
@@ -748,6 +882,17 @@ async function route() {
 shell();
 route();
 window.addEventListener('hashchange', route);
+
+let paginationResizeTimer = null;
 window.addEventListener('resize', () => {
-  if (location.hash !== '#admin') draw();
+  if (location.hash === '#admin' || !pages.length) return;
+  clearTimeout(paginationResizeTimer);
+  paginationResizeTimer = setTimeout(async () => {
+    const oldIndex = index;
+    await document.fonts?.ready;
+    paginateNotebookPages();
+    const total = getBookPages().length;
+    index = Math.min(oldIndex, mobileBook() ? total - 1 : Math.ceil(total / 2) - 1);
+    draw();
+  }, 180);
 });
