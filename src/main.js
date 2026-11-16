@@ -251,7 +251,7 @@ function paginateNotebookPages() {
   // virtual page boundaries identical when the reader rotates or resizes a screen.
   const measure = document.createElement('article');
   measure.className = 'paper right-paper pagination-measure';
-  measure.style.cssText = 'position:fixed;left:-10000px;top:0;right:auto;display:block;visibility:hidden;pointer-events:none;width:513px;height:667px;padding:54px 58px;border:0;';
+  measure.style.cssText = 'position:fixed;left:-10000px;top:0;right:auto;display:block;visibility:hidden;pointer-events:none;box-sizing:border-box;width:500px;height:650px;padding:54px 54px;border:0;';
   document.body.appendChild(measure);
 
   const fits = (source, html) => {
