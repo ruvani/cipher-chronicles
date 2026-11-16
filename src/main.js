@@ -251,7 +251,7 @@ function paginateNotebookPages() {
   // virtual page boundaries identical when the reader rotates or resizes a screen.
   const measure = document.createElement('article');
   measure.className = 'paper right-paper pagination-measure';
-  measure.style.cssText = 'position:fixed;left:-10000px;top:0;right:auto;display:block;visibility:hidden;pointer-events:none;width:420px;height:650px;padding:40px 20px;border:0;';
+  measure.style.cssText = 'position:fixed;left:-10000px;top:0;right:auto;display:block;visibility:hidden;pointer-events:none;width:360px;height:610px;padding:23px 20px;border:0;';
   document.body.appendChild(measure);
 
   const fits = (source, html) => {
@@ -259,12 +259,6 @@ function paginateNotebookPages() {
     measure.innerHTML = pageMarkup(testPage, 1);
     const inner = measure.querySelector('.page-inner');
     const body = inner?.querySelector('.article-body');
-    // Keep measurement typography fixed so mobile and desktop generate the
-    // same logical page breaks, even though the displayed mobile text is smaller.
-    if (body) {
-      body.style.fontSize = '16px';
-      body.style.lineHeight = '1.62';
-    }
     return !!inner && inner.scrollHeight <= inner.clientHeight + 1 && (!body || body.scrollHeight <= body.clientHeight + 1);
   };
 
@@ -465,7 +459,13 @@ function draw() {
   const mobile = singlePageMode();
   document.querySelector('#book')?.classList.toggle('single-page-mode', mobile);
   if (mobile !== lastMobileMode) {
-    if (index >= 0) index = mobile ? index * 2 : Math.floor(index / 2);
+    // `index` represents a physical page in single-page mode, but a spread
+    // number in desktop mode. Convert in the correct direction so rotating
+    // the device preserves the currently visible logical page without
+    // skipping, repeating, or duplicating the Contents spread.
+    if (index >= 0) {
+      index = mobile ? index * 2 : Math.floor(index / 2);
+    }
     lastMobileMode = mobile;
   }
 
