@@ -921,3 +921,14 @@ footer {
     .toc-name { font-size: 9px; }
     .toc-title { font-size: 14px; }
 }
+
+/* Print/export control for the reader. */
+.print-book-button {
+    border-color: #b58a4a;
+    background: #a7804b;
+    color: #211a17;
+}
+.print-book-button:hover { background: #c09a61; }
+@media (max-width: 760px) {
+    .print-book-button { padding: 8px 10px; }
+}
