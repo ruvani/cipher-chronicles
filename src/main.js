@@ -237,9 +237,18 @@ function printBook() {
     group.pages.push(p);
   });
 
-  const contents = chapterGroups.map(group =>
-    `<li><a href="#${group.id}">${escapeHTML(group.label)}</a></li>`
-  ).join('');
+  const contents = chapterGroups.map(group => {
+    // The chapter field is the chapter number/label (for example, "Chapter 01"),
+    // while the first non-continuation page title contains the readable chapter
+    // heading (for example, "Introduction to Cryptography"). Show both in the
+    // printable contents instead of dropping the actual chapter title.
+    const chapterTitle = group.pages.find(p => p.page_type !== 'continuation' && p.title)?.title?.trim() || '';
+    const showTitle = chapterTitle && chapterTitle.toLowerCase() !== group.label.toLowerCase();
+    const contentsLabel = showTitle
+      ? `<span class="print-toc-number">${escapeHTML(group.label)}</span><span class="print-toc-title">${escapeHTML(chapterTitle)}</span>`
+      : `<span class="print-toc-number">${escapeHTML(group.label)}</span>`;
+    return `<li><a href="#${group.id}">${contentsLabel}</a></li>`;
+  }).join('');
 
   const chapterHTML = chapterGroups.map(group => {
     const first = group.pages[0];
@@ -291,8 +300,10 @@ function printBook() {
   .print-cover .rule { width: 32mm; border-top: 2px solid #b58a4a; margin: 10mm auto; }
   .print-contents { page-break-after: always; break-after: page; }
   .print-contents h1 { font-size: 23pt; border-bottom: 1px solid #b58a4a; padding-bottom: 4mm; }
-  .print-contents li { margin: 3mm 0; }
-  .print-contents a { color: inherit; text-decoration: none; }
+  .print-contents li { margin: 4mm 0; }
+  .print-contents a { color: inherit; text-decoration: none; display: flex; flex-wrap: wrap; gap: 0 2mm; }
+  .print-toc-number { font-weight: 700; }
+  .print-toc-title { color: #70583a; }
   .print-chapter { page-break-before: always; break-before: page; }
   .print-chapter:first-of-type { page-break-before: auto; break-before: auto; }
   .print-chapter-label { margin-bottom: 4mm; }
