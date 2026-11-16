@@ -67,6 +67,37 @@ main {
     text-align: center
 }
 
+.page-jump-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    color: #d0b88e;
+    font: 10px 'Special Elite', monospace;
+    white-space: nowrap;
+}
+
+.page-jump-label select {
+    max-width: 190px;
+    padding: 8px 9px;
+    border: 1px solid #8e7048;
+    border-radius: 0;
+    background: #30251e;
+    color: #e8d8b5;
+    font: 10px 'Special Elite', monospace;
+}
+
+.page-jump-label select:focus-visible {
+    outline: 2px solid #d1b17c;
+    outline-offset: 2px;
+}
+
+@media (max-width: 760px) {
+    .navline { gap: 8px; flex-wrap: wrap; }
+    .navline span { min-width: 86px; }
+    .page-jump-label { gap: 4px; }
+    .page-jump-label select { max-width: 125px; padding: 7px 5px; }
+}
+
 button {
     cursor: pointer;
     border: 1px solid #8e7048;
